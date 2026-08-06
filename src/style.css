@@ -172,13 +172,13 @@ h1 {
 .histogram-wrap {
   position: relative;
   width: 100%;
-  padding-top: 20px;
+  padding-top: 56px;
 }
 
 .histogram-corner {
   position: absolute;
-  top: 14px;
-  font-size: 0.7rem;
+  top: 16px;
+  font-size: 1.75rem;
   color: #8b93a7;
   letter-spacing: 0.05em;
 }

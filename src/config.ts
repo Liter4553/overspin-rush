@@ -118,4 +118,4 @@ export const VIEWPORT_FIT_MAX_SCALE = 1.8;
 
 // 결과 화면은 콘텐츠가 적어서 게임 화면과 같은 배율이면 상대적으로 작아 보인다.
 // 게임 화면 맞춤 배율(scale) 위에 이 배수를 추가로 곱해서 더 크게 보여준다.
-export const RESULTS_SCALE_BOOST = 1.4;
+export const RESULTS_SCALE_BOOST = 1.82;
