@@ -26,6 +26,7 @@ import {
   INPUT_OFFSET_MS,
   JUDGEABLE_LANES,
   NOTE_JUDGMENT_TABLE,
+  RESULTS_SCALE_BOOST,
   VIEWPORT_FIT_MARGIN_PX,
   VIEWPORT_FIT_MAX_SCALE,
   VIEWPORT_FIT_MIN_SCALE,
@@ -134,15 +135,29 @@ function setCanvasResolution(uiScale: number): void {
   ctx.setTransform(effectiveScale, 0, 0, effectiveScale, 0, 0);
 }
 
-// 확대 전(zoom=1) 상태에서 자연 크기를 한 번만 측정해둔다. 결과 화면도 같은
-// 배율을 그대로 재사용해야 하므로, 결과 화면이 아닌 게임 화면(더 큰 쪽) 기준으로 잰다.
+// 확대 전(zoom=1) 상태에서 자연 크기를 한 번만 측정해둔다. 결과 화면도 이 크기를
+// 기준으로 배율을 계산하므로, 결과 화면이 아닌 게임 화면(더 큰 쪽) 기준으로 잰다.
 const naturalWidth = app.scrollWidth;
 const naturalHeight = app.scrollHeight;
+
+const clock = new AudioClock();
+type Phase = "playing" | "results";
+let phase: Phase = "playing";
+let baseFitScale = 1;
+
+function applyZoom(): void {
+  // 결과 화면은 콘텐츠가 적어 같은 배율이면 상대적으로 작아 보이므로 추가로 키운다.
+  const zoom = phase === "results" ? baseFitScale * RESULTS_SCALE_BOOST : baseFitScale;
+  // transform은 레이아웃 박스 크기를 바꾸지 않아 스크롤/중앙정렬이 어긋나므로
+  // 레이아웃까지 함께 반영되는 zoom을 쓴다.
+  app.style.setProperty("zoom", String(zoom));
+  setCanvasResolution(baseFitScale);
+}
 
 function fitToViewport(): void {
   const availableWidth = window.innerWidth - VIEWPORT_FIT_MARGIN_PX;
   const availableHeight = window.innerHeight - VIEWPORT_FIT_MARGIN_PX;
-  const scale = computeFitScale(
+  baseFitScale = computeFitScale(
     naturalWidth,
     naturalHeight,
     availableWidth,
@@ -150,18 +165,12 @@ function fitToViewport(): void {
     VIEWPORT_FIT_MIN_SCALE,
     VIEWPORT_FIT_MAX_SCALE,
   );
-  // transform은 레이아웃 박스 크기를 바꾸지 않아 스크롤/중앙정렬이 어긋나므로
-  // 레이아웃까지 함께 반영되는 zoom을 쓴다.
-  app.style.setProperty("zoom", String(scale));
-  setCanvasResolution(scale);
+  applyZoom();
 }
 
 fitToViewport();
 window.addEventListener("resize", fitToViewport);
 
-const clock = new AudioClock();
-type Phase = "playing" | "results";
-let phase: Phase = "playing";
 let noteTracker = createNoteTracker(chart);
 let gameState = createGameState();
 let judgmentTicks: JudgmentTick[] = [];
@@ -213,6 +222,7 @@ function showResults(): void {
 
   gameplayView.hidden = true;
   resultsPanel.hidden = false;
+  applyZoom();
 }
 
 // 판정은 keydown 발생 즉시 계산한다 — rAF/프레임 타이밍과 무관 (SPEC.md 1절).
@@ -290,6 +300,7 @@ async function startPlay(): Promise<void> {
   phase = "playing";
   gameplayView.hidden = false;
   resultsPanel.hidden = true;
+  applyZoom();
   updateHud();
 
   await clock.start();
