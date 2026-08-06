@@ -6,7 +6,13 @@ import { describe, expect, it } from "vitest";
 import { computeErrorMs, displaySign, judge } from "./judge";
 import { applyAutoMiss, createNoteTracker, findNearestPendingNote, markJudged } from "./noteState";
 import { applyJudgement, createGameState } from "./gameState";
-import { NOTE_JUDGMENT_TABLE, AUTO_MISS_WINDOW_MS, AUDIO_OFFSET_MS, INPUT_OFFSET_MS } from "../config";
+import {
+  NOTE_JUDGMENT_TABLE,
+  AUTO_MISS_WINDOW_MS,
+  AUDIO_OFFSET_MS,
+  INPUT_OFFSET_MS,
+  JUDGEABLE_LANES,
+} from "../config";
 import type { Chart } from "../chart/types";
 
 function makeChart(notes: Chart["notes"]): Chart {
@@ -114,5 +120,24 @@ describe("판정 흐름 통합 (judge + noteState + gameState)", () => {
     }
     expect(state.combo).toBe(0);
     expect(state.gradeCounts.MISS).toBe(1);
+  });
+
+  it("main.ts와 동일하게 JUDGEABLE_LANES로 필터링하면 FX/스크래치는 자동 MISS 대상에서 제외된다 (회귀 테스트)", () => {
+    const chart = makeChart([
+      { time: 1000, lane: 0, type: "tap" },
+      { time: 1000, lane: "fx", type: "tap" },
+      { time: 1000, lane: "scratch", type: "tap" },
+    ]);
+    const tracker = createNoteTracker(chart);
+
+    // main.ts renderLoop이 하는 것과 동일: 판정 대상 레인만 걸러서 auto-miss에 넘긴다.
+    const judgeableTracked = tracker.filter((t) => JUDGEABLE_LANES.includes(t.note.lane));
+    const missed = applyAutoMiss(judgeableTracked, 1081, AUTO_MISS_WINDOW_MS);
+
+    expect(missed).toHaveLength(1); // 노트 레인 0만 MISS
+    const fxEntry = tracker.find((t) => t.note.lane === "fx")!;
+    const scratchEntry = tracker.find((t) => t.note.lane === "scratch")!;
+    expect(fxEntry.state).toBe("pending"); // FX는 아직 판정 시스템이 안 붙었으니 pending 유지
+    expect(scratchEntry.state).toBe("pending");
   });
 });

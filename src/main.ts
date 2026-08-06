@@ -23,12 +23,13 @@ import {
   DEFAULT_KEYMAP,
   DEFAULT_SCRATCH_SIDE,
   INPUT_OFFSET_MS,
+  JUDGEABLE_LANES,
   NOTE_JUDGMENT_TABLE,
 } from "./config";
 
 const GRADE_ORDER = ["PERFECT_PLUS", "PERFECT", "GREAT", "GOOD", "MISS"] as const;
 
-function gradePanelHtml(idPrefix: string): string {
+function gradePanelHtml(idPrefix: string, includeFastSlow: boolean): string {
   const grades = GRADE_ORDER.map(
     (grade) => `
       <div class="grade-stat">
@@ -36,6 +37,7 @@ function gradePanelHtml(idPrefix: string): string {
         <span class="grade-value" id="${idPrefix}-${grade}">0</span>
       </div>`,
   ).join("");
+  if (!includeFastSlow) return grades;
   return `${grades}
     <div class="grade-stat">
       <span class="grade-label">FAST</span>
@@ -50,27 +52,30 @@ function gradePanelHtml(idPrefix: string): string {
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
   <h1>Overspin RUSH</h1>
-  <div class="clock-panel">
-    <div class="stat">
-      <span class="stat-label">TIME</span>
-      <span class="stat-value" id="time-display">00:00.000</span>
+
+  <div id="gameplay-view">
+    <div class="clock-panel">
+      <div class="stat">
+        <span class="stat-label">TIME</span>
+        <span class="stat-value" id="time-display">00:00.000</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">BPM</span>
+        <span class="stat-value" id="bpm-display">--</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">COMBO</span>
+        <span class="stat-value" id="combo-display">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">SCORE</span>
+        <span class="stat-value" id="score-display">0</span>
+      </div>
     </div>
-    <div class="stat">
-      <span class="stat-label">BPM</span>
-      <span class="stat-value" id="bpm-display">--</span>
-    </div>
-    <div class="stat">
-      <span class="stat-label">COMBO</span>
-      <span class="stat-value" id="combo-display">0</span>
-    </div>
-    <div class="stat">
-      <span class="stat-label">SCORE</span>
-      <span class="stat-value" id="score-display">0</span>
-    </div>
+    <canvas id="game-canvas"></canvas>
+    <div class="grade-panel" id="grade-panel"></div>
+    <button id="start-btn">시작</button>
   </div>
-  <canvas id="game-canvas"></canvas>
-  <div class="grade-panel" id="grade-panel"></div>
-  <button id="start-btn">시작</button>
 
   <div class="results-panel" id="results-panel" hidden>
     <h2>RESULT</h2>
@@ -81,8 +86,12 @@ app.innerHTML = `
       <div class="summary-stat"><span class="summary-label">MAX COMBO</span><span class="summary-value" id="result-maxcombo">0</span></div>
     </div>
     <div class="grade-panel" id="result-grade-panel"></div>
-    <div class="histogram-label">판정 오차 분포 (FAST ← 0 → SLOW)</div>
-    <div class="histogram" id="result-histogram"></div>
+    <div class="histogram-label">판정 오차 분포</div>
+    <div class="histogram-wrap">
+      <span class="histogram-corner histogram-corner-fast">FAST <span id="result-grade-fast">0</span></span>
+      <span class="histogram-corner histogram-corner-slow">SLOW <span id="result-grade-slow">0</span></span>
+      <div class="histogram" id="result-histogram"></div>
+    </div>
     <button id="restart-btn">다시하기</button>
   </div>
 `;
@@ -95,13 +104,14 @@ const gradePanel = document.querySelector<HTMLDivElement>("#grade-panel")!;
 const startBtn = document.querySelector<HTMLButtonElement>("#start-btn")!;
 const canvas = document.querySelector<HTMLCanvasElement>("#game-canvas")!;
 const ctx = canvas.getContext("2d")!;
+const gameplayView = document.querySelector<HTMLDivElement>("#gameplay-view")!;
 const resultsPanel = document.querySelector<HTMLDivElement>("#results-panel")!;
 const resultGradePanel = document.querySelector<HTMLDivElement>("#result-grade-panel")!;
 const resultHistogram = document.querySelector<HTMLDivElement>("#result-histogram")!;
 const restartBtn = document.querySelector<HTMLButtonElement>("#restart-btn")!;
 
-gradePanel.innerHTML = gradePanelHtml("grade");
-resultGradePanel.innerHTML = gradePanelHtml("result-grade");
+gradePanel.innerHTML = gradePanelHtml("grade", true);
+resultGradePanel.innerHTML = gradePanelHtml("result-grade", false);
 
 const canvasWidth = CANVAS_WIDTH_OPTIONS[DEFAULT_CANVAS_WIDTH_OPTION];
 const dpr = window.devicePixelRatio || 1;
@@ -166,7 +176,7 @@ function showResults(): void {
   document.querySelector("#result-grade-slow")!.textContent = String(summary.slowCount);
   renderHistogram(summary.errorHistogram);
 
-  canvas.hidden = true;
+  gameplayView.hidden = true;
   resultsPanel.hidden = false;
 }
 
@@ -205,7 +215,9 @@ window.addEventListener("keydown", handleKeydown);
 function renderLoop(): void {
   const currentTimeMs = clock.currentTime * 1000;
 
-  const newlyMissed = applyAutoMiss(noteTracker, currentTimeMs, AUTO_MISS_WINDOW_MS);
+  // 아직 판정이 붙지 않은 레인(FX/스크래치)은 자동 MISS 대상에서 제외한다.
+  const judgeableTracked = noteTracker.filter((t) => JUDGEABLE_LANES.includes(t.note.lane));
+  const newlyMissed = applyAutoMiss(judgeableTracked, currentTimeMs, AUTO_MISS_WINDOW_MS);
   if (newlyMissed.length > 0) {
     newlyMissed.forEach(() => {
       gameState = applyJudgement(gameState, "MISS", 0, null);
@@ -241,7 +253,7 @@ async function startPlay(): Promise<void> {
   judgmentTicks = [];
   latestJudgment = null;
   phase = "playing";
-  canvas.hidden = false;
+  gameplayView.hidden = false;
   resultsPanel.hidden = true;
   updateHud();
 

@@ -21,6 +21,17 @@ body {
   gap: 24px;
 }
 
+#gameplay-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+#gameplay-view[hidden] {
+  display: none;
+}
+
 h1 {
   font-size: 1.4rem;
   letter-spacing: 0.1em;
@@ -117,6 +128,10 @@ h1 {
   background: #0e0f14;
 }
 
+.results-panel[hidden] {
+  display: none;
+}
+
 .results-panel h2 {
   margin: 0;
   letter-spacing: 0.15em;
@@ -152,6 +167,33 @@ h1 {
 .histogram-label {
   font-size: 0.75rem;
   color: #8b93a7;
+}
+
+.histogram-wrap {
+  position: relative;
+  width: 100%;
+  padding-top: 20px;
+}
+
+.histogram-corner {
+  position: absolute;
+  top: 0;
+  font-size: 0.7rem;
+  color: #8b93a7;
+  letter-spacing: 0.05em;
+}
+
+.histogram-corner span {
+  font-family: "Consolas", monospace;
+  color: #e8eaf0;
+}
+
+.histogram-corner-fast {
+  left: 0;
+}
+
+.histogram-corner-slow {
+  right: 0;
 }
 
 .histogram {
