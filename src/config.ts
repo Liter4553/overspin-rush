@@ -1,4 +1,5 @@
 // 게임 전역 상수. 매직넘버 금지 — 값은 전부 여기서 관리한다.
+import type { JudgeTableEntry } from "./core/judge";
 
 // 마일스톤 1 임시 표시용 기본 BPM. 이후 채보 로드 시 bpmChanges로 대체된다.
 export const DEFAULT_BPM = 150;
@@ -46,3 +47,55 @@ export const SCRATCH_LANE_TINT_COLOR = "#1D9E75";
 export const SCRATCH_LANE_TINT_OPACITY = 0.14;
 export const JUDGE_LINE_COLOR = "#D85A30";
 export const LANE_DIVIDER_COLOR = "rgba(255, 255, 255, 0.15)";
+
+// --- 판정 (SPEC.md 4절) ---
+// 각 값은 패스트/슬로우 각각의 한계값(대칭). windowMs 오름차순 유지 필수.
+export const NOTE_JUDGMENT_TABLE: readonly JudgeTableEntry[] = [
+  { grade: "PERFECT_PLUS", windowMs: 20, score: 4 },
+  { grade: "PERFECT", windowMs: 40, score: 3 },
+  { grade: "GREAT", windowMs: 60, score: 2 },
+  { grade: "GOOD", windowMs: 80, score: 1 },
+];
+
+// 스크래치는 PERFECT 등급이 없다(의도된 설계). 40ms를 벗어나면 곧바로 GREAT로 떨어진다.
+export const SCRATCH_JUDGMENT_TABLE: readonly JudgeTableEntry[] = [
+  { grade: "PERFECT_PLUS", windowMs: 40, score: 4 },
+  { grade: "GREAT", windowMs: 60, score: 2 },
+  { grade: "GOOD", windowMs: 80, score: 1 },
+];
+
+// 노트가 슬로우 쪽으로 이 값(ms)을 지나면 자동 MISS. GOOD 윈도우와 동일해야 한다.
+export const AUTO_MISS_WINDOW_MS = 80;
+
+// 사용자 조정 가능한 오디오/입력 오프셋(ms). 실제 조절 UI는 마일스톤 8.
+export const AUDIO_OFFSET_MS = 0;
+export const INPUT_OFFSET_MS = 0;
+
+// --- 키 입력 ---
+// 마일스톤 8 리매핑 UI가 이 맵만 교체하면 되도록 분리.
+export const DEFAULT_KEYMAP: Readonly<Record<string, 0 | 1 | 2>> = {
+  a: 0,
+  s: 1,
+  d: 2,
+};
+
+// --- 판정바 ---
+export const JUDGMENT_BAR_RANGE_MS = 80; // GOOD 경계까지 표시
+export const JUDGMENT_BAR_HEIGHT = 40;
+export const JUDGMENT_BAR_MARGIN_TOP = 24; // 판정선 아래로 떨어진 거리(px)
+export const JUDGMENT_TICK_FADE_MS = 2000;
+export const JUDGMENT_TICK_HISTORY_MAX = 30;
+
+export const JUDGE_GRADE_COLORS: Readonly<Record<string, string>> = {
+  PERFECT_PLUS: "#FAC775",
+  PERFECT: "#5DCAA5",
+  GREAT: "#85B7EB",
+  GOOD: "#B4B2A9",
+  MISS: "#F09595",
+};
+
+// --- 홀드 틱 (마일스톤 6에서 사용) ---
+export const DEFAULT_HOLD_TICK_INTERVAL_BEATS = 1;
+
+// 판정 텍스트가 화면에 머무는 시간(ms). 애니메이션은 마일스톤 9에서.
+export const JUDGE_TEXT_DISPLAY_MS = 500;
