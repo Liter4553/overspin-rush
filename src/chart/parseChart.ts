@@ -28,6 +28,9 @@ function parseNote(value: unknown, index: number): ChartNote {
   if (!isNoteLane(item.lane)) throw new Error(`notes[${index}].lane 값이 올바르지 않습니다: ${String(item.lane)}`);
   if (!isNoteType(item.type)) throw new Error(`notes[${index}].type 값이 올바르지 않습니다: ${String(item.type)}`);
   if (item.type === "hold") {
+    if (item.lane === "scratch") {
+      throw new Error(`notes[${index}]: 스크래치 노트는 홀드를 지원하지 않습니다.`);
+    }
     if (typeof item.duration !== "number") {
       throw new Error(`notes[${index}]는 홀드 노트인데 duration이 없습니다.`);
     }

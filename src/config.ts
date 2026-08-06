@@ -37,9 +37,11 @@ export const NOTE_HEIGHT = 26;
 export const NOTE_INSET = 10;
 
 export const NOTE_COLOR = "#378ADD";
-export const FX_COLOR = "#BA7517";
-export const FX_OPACITY = 0.38;
+export const FX_COLOR = "#EF9F27";
+export const FX_OPACITY = 0.55;
 export const SCRATCH_NOTE_COLOR = "#5DCAA5";
+// 스크래치 노트 프레임(일반 노트와 형태 통일) 안에 마름모를 그릴 때의 여백 비율.
+export const SCRATCH_DIAMOND_INSET_RATIO = 0.28;
 export const SCRATCH_LANE_TINT_COLOR = "#1D9E75";
 export const SCRATCH_LANE_TINT_OPACITY = 0.14;
 export const JUDGE_LINE_COLOR = "#D85A30";

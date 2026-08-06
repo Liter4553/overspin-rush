@@ -36,4 +36,15 @@ describe("parseChart", () => {
   it("notes가 배열이 아니면 에러를 던진다", () => {
     expect(() => parseChart({ ...validChart, notes: "nope" })).toThrow();
   });
+
+  it("스크래치 노트가 hold이면 에러를 던진다", () => {
+    expect(() =>
+      parseChart({ ...validChart, notes: [{ time: 0, lane: "scratch", type: "hold", duration: 300 }] }),
+    ).toThrow();
+  });
+
+  it("스크래치 tap 노트는 정상적으로 파싱된다", () => {
+    const chart = parseChart({ ...validChart, notes: [{ time: 0, lane: "scratch", type: "tap" }] });
+    expect(chart.notes[0].lane).toBe("scratch");
+  });
 });

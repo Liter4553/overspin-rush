@@ -6,6 +6,7 @@ import {
   NOTE_COLOR,
   NOTE_HEIGHT,
   NOTE_INSET,
+  SCRATCH_DIAMOND_INSET_RATIO,
   SCRATCH_LANE_TINT_COLOR,
   SCRATCH_LANE_TINT_OPACITY,
   SCRATCH_NOTE_COLOR,
@@ -79,9 +80,26 @@ export function drawNotes(
     if (note.lane === "fx") continue;
 
     if (note.lane === "scratch") {
+      // 스크래치는 홀드를 지원하지 않는다(parseChart에서 이미 거부).
+      // 일반 노트와 형태를 통일하기 위해 사각 프레임 안에 마름모를 그린다.
       const y = noteY(note.time, currentTimeMs, greenNumberMs, layout.judgeLineY);
-      const cx = layout.scratchLaneX + layout.scratchLaneWidth / 2;
-      const half = NOTE_HEIGHT / 2;
+      const frameWidth = layout.scratchLaneWidth - NOTE_INSET * 2;
+      const frameX = layout.scratchLaneX + NOTE_INSET;
+      const frameY = y - NOTE_HEIGHT / 2;
+      const frameRadius = Math.min(8, frameWidth / 2, NOTE_HEIGHT / 2);
+
+      ctx.beginPath();
+      ctx.roundRect(frameX, frameY, frameWidth, NOTE_HEIGHT, frameRadius);
+      ctx.fillStyle = SCRATCH_NOTE_COLOR;
+      ctx.globalAlpha = 0.18;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = SCRATCH_NOTE_COLOR;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      const cx = frameX + frameWidth / 2;
+      const half = (NOTE_HEIGHT / 2) * (1 - SCRATCH_DIAMOND_INSET_RATIO);
       ctx.fillStyle = SCRATCH_NOTE_COLOR;
       ctx.beginPath();
       ctx.moveTo(cx, y - half);
