@@ -1,0 +1,118 @@
+import {
+  FX_COLOR,
+  FX_OPACITY,
+  JUDGE_LINE_COLOR,
+  LANE_DIVIDER_COLOR,
+  NOTE_COLOR,
+  NOTE_HEIGHT,
+  NOTE_INSET,
+  SCRATCH_LANE_TINT_COLOR,
+  SCRATCH_LANE_TINT_OPACITY,
+  SCRATCH_NOTE_COLOR,
+} from "../config";
+import type { ChartNote } from "../chart/types";
+import { noteY } from "../core/scroll";
+import type { LaneLayout } from "./canvas";
+
+// 렌더 순서(SPEC.md 3절): 레인 배경 → FX 노트 → 일반 노트 → 판정선 → 이펙트(추후).
+// 아래 draw 함수들은 이 순서로 호출되어야 FX 바가 일반 노트에 가려지지 않는다.
+
+export function drawLaneBackground(ctx: CanvasRenderingContext2D, layout: LaneLayout): void {
+  ctx.fillStyle = SCRATCH_LANE_TINT_COLOR;
+  ctx.globalAlpha = SCRATCH_LANE_TINT_OPACITY;
+  ctx.fillRect(layout.scratchLaneX, 0, layout.scratchLaneWidth, layout.canvasHeight);
+  ctx.globalAlpha = 1;
+
+  ctx.strokeStyle = LANE_DIVIDER_COLOR;
+  ctx.lineWidth = 1;
+  const dividerXs = [...layout.noteLaneX.slice(1), layout.scratchLaneX];
+  for (const x of dividerXs) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, layout.canvasHeight);
+    ctx.stroke();
+  }
+}
+
+function fxBarY(note: ChartNote, currentTimeMs: number, greenNumberMs: number, judgeLineY: number): number {
+  const endTime = note.type === "hold" ? note.time + (note.duration ?? 0) : note.time;
+  return noteY(endTime, currentTimeMs, greenNumberMs, judgeLineY);
+}
+
+export function drawFxNotes(
+  ctx: CanvasRenderingContext2D,
+  layout: LaneLayout,
+  notes: ChartNote[],
+  currentTimeMs: number,
+  greenNumberMs: number,
+): void {
+  const fxRegionX = layout.noteLaneX[0];
+  const fxRegionWidth = layout.noteLaneWidth * layout.noteLaneX.length;
+
+  ctx.fillStyle = FX_COLOR;
+  ctx.globalAlpha = FX_OPACITY;
+  for (const note of notes) {
+    if (note.lane !== "fx") continue;
+    const y = fxBarY(note, currentTimeMs, greenNumberMs, layout.judgeLineY);
+    ctx.fillRect(fxRegionX, y - NOTE_HEIGHT / 2, fxRegionWidth, NOTE_HEIGHT);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawNoteRect(ctx: CanvasRenderingContext2D, x: number, width: number, topY: number, bottomY: number, color: string): void {
+  const height = Math.max(NOTE_HEIGHT, bottomY - topY);
+  const radius = Math.min(8, width / 2, height / 2);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.roundRect(x, topY, width, height, radius);
+  ctx.fill();
+}
+
+export function drawNotes(
+  ctx: CanvasRenderingContext2D,
+  layout: LaneLayout,
+  notes: ChartNote[],
+  currentTimeMs: number,
+  greenNumberMs: number,
+): void {
+  for (const note of notes) {
+    if (note.lane === "fx") continue;
+
+    if (note.lane === "scratch") {
+      const y = noteY(note.time, currentTimeMs, greenNumberMs, layout.judgeLineY);
+      const cx = layout.scratchLaneX + layout.scratchLaneWidth / 2;
+      const half = NOTE_HEIGHT / 2;
+      ctx.fillStyle = SCRATCH_NOTE_COLOR;
+      ctx.beginPath();
+      ctx.moveTo(cx, y - half);
+      ctx.lineTo(cx + half, y);
+      ctx.lineTo(cx, y + half);
+      ctx.lineTo(cx - half, y);
+      ctx.closePath();
+      ctx.fill();
+      continue;
+    }
+
+    const laneX = layout.noteLaneX[note.lane];
+    const x = laneX + NOTE_INSET;
+    const width = layout.noteLaneWidth - NOTE_INSET * 2;
+
+    if (note.type === "hold") {
+      const startY = noteY(note.time, currentTimeMs, greenNumberMs, layout.judgeLineY);
+      const endY = noteY(note.time + (note.duration ?? 0), currentTimeMs, greenNumberMs, layout.judgeLineY);
+      drawNoteRect(ctx, x, width, endY, startY, NOTE_COLOR);
+    } else {
+      const y = noteY(note.time, currentTimeMs, greenNumberMs, layout.judgeLineY);
+      drawNoteRect(ctx, x, width, y - NOTE_HEIGHT / 2, y + NOTE_HEIGHT / 2, NOTE_COLOR);
+    }
+  }
+}
+
+export function drawJudgeLine(ctx: CanvasRenderingContext2D, layout: LaneLayout): void {
+  ctx.strokeStyle = JUDGE_LINE_COLOR;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(0, layout.judgeLineY);
+  ctx.lineTo(layout.canvasWidth, layout.judgeLineY);
+  ctx.stroke();
+}

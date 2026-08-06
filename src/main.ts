@@ -1,6 +1,17 @@
 import "./style.css";
 import { AudioClock } from "./core/audioClock";
-import { DEFAULT_BPM } from "./config";
+import { currentBpm } from "./core/scroll";
+import { parseChart } from "./chart/parseChart";
+import { dummyChartRaw } from "./chart/dummyChart";
+import { computeLaneLayout } from "./render/canvas";
+import { drawFxNotes, drawJudgeLine, drawLaneBackground, drawNotes } from "./render/noteRenderer";
+import {
+  BASE_GREEN_NUMBER_MS,
+  CANVAS_HEIGHT,
+  CANVAS_WIDTH_OPTIONS,
+  DEFAULT_CANVAS_WIDTH_OPTION,
+  DEFAULT_SCRATCH_SIDE,
+} from "./config";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
@@ -15,15 +26,28 @@ app.innerHTML = `
       <span class="stat-value" id="bpm-display">--</span>
     </div>
   </div>
+  <canvas id="game-canvas"></canvas>
   <button id="start-btn">시작</button>
 `;
 
 const timeDisplay = document.querySelector<HTMLSpanElement>("#time-display")!;
 const bpmDisplay = document.querySelector<HTMLSpanElement>("#bpm-display")!;
 const startBtn = document.querySelector<HTMLButtonElement>("#start-btn")!;
+const canvas = document.querySelector<HTMLCanvasElement>("#game-canvas")!;
+const ctx = canvas.getContext("2d")!;
+
+const canvasWidth = CANVAS_WIDTH_OPTIONS[DEFAULT_CANVAS_WIDTH_OPTION];
+const dpr = window.devicePixelRatio || 1;
+canvas.width = canvasWidth * dpr;
+canvas.height = CANVAS_HEIGHT * dpr;
+canvas.style.width = `${canvasWidth}px`;
+canvas.style.height = `${CANVAS_HEIGHT}px`;
+ctx.scale(dpr, dpr);
+
+const layout = computeLaneLayout(canvasWidth, DEFAULT_SCRATCH_SIDE);
+const chart = parseChart(dummyChartRaw);
 
 const clock = new AudioClock();
-bpmDisplay.textContent = String(DEFAULT_BPM);
 
 function formatTime(seconds: number): string {
   const clamped = Math.max(0, seconds);
@@ -33,9 +57,19 @@ function formatTime(seconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}.${String(millis).padStart(3, "0")}`;
 }
 
-// rAF는 렌더링 전용. 판정 로직에는 절대 쓰지 않는다 — 여기서는 표시 갱신만 담당.
+// rAF는 렌더링 전용. 판정 로직에는 절대 쓰지 않는다 — 여기서는 화면 갱신만 담당.
 function renderLoop(): void {
+  const currentTimeMs = clock.currentTime * 1000;
+
   timeDisplay.textContent = formatTime(clock.currentTime);
+  bpmDisplay.textContent = String(currentBpm(chart.bpmChanges, currentTimeMs));
+
+  ctx.clearRect(0, 0, canvasWidth, CANVAS_HEIGHT);
+  drawLaneBackground(ctx, layout);
+  drawFxNotes(ctx, layout, chart.notes, currentTimeMs, BASE_GREEN_NUMBER_MS);
+  drawNotes(ctx, layout, chart.notes, currentTimeMs, BASE_GREEN_NUMBER_MS);
+  drawJudgeLine(ctx, layout);
+
   requestAnimationFrame(renderLoop);
 }
 
