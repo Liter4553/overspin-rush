@@ -11,6 +11,8 @@ import { applyAutoMiss, createNoteTracker, findNearestPendingNote, markJudged } 
 import { applyJudgement, createGameState } from "./core/gameState";
 import { computeErrorMs, displaySign, judge } from "./core/judge";
 import { resolveLaneFromKey } from "./input/keyboard";
+import { isChartComplete } from "./core/chartCompletion";
+import { computeResults } from "./core/results";
 import {
   AUDIO_OFFSET_MS,
   AUTO_MISS_WINDOW_MS,
@@ -23,6 +25,27 @@ import {
   INPUT_OFFSET_MS,
   NOTE_JUDGMENT_TABLE,
 } from "./config";
+
+const GRADE_ORDER = ["PERFECT_PLUS", "PERFECT", "GREAT", "GOOD", "MISS"] as const;
+
+function gradePanelHtml(idPrefix: string): string {
+  const grades = GRADE_ORDER.map(
+    (grade) => `
+      <div class="grade-stat">
+        <span class="grade-label">${grade.replace("_PLUS", "+")}</span>
+        <span class="grade-value" id="${idPrefix}-${grade}">0</span>
+      </div>`,
+  ).join("");
+  return `${grades}
+    <div class="grade-stat">
+      <span class="grade-label">FAST</span>
+      <span class="grade-value" id="${idPrefix}-fast">0</span>
+    </div>
+    <div class="grade-stat">
+      <span class="grade-label">SLOW</span>
+      <span class="grade-value" id="${idPrefix}-slow">0</span>
+    </div>`;
+}
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
@@ -48,6 +71,20 @@ app.innerHTML = `
   <canvas id="game-canvas"></canvas>
   <div class="grade-panel" id="grade-panel"></div>
   <button id="start-btn">시작</button>
+
+  <div class="results-panel" id="results-panel" hidden>
+    <h2>RESULT</h2>
+    <div class="results-summary">
+      <div class="summary-stat"><span class="summary-label">SCORE</span><span class="summary-value" id="result-score">0</span></div>
+      <div class="summary-stat"><span class="summary-label">이론치</span><span class="summary-value" id="result-theoretical">0</span></div>
+      <div class="summary-stat"><span class="summary-label">정확도</span><span class="summary-value" id="result-accuracy">0%</span></div>
+      <div class="summary-stat"><span class="summary-label">MAX COMBO</span><span class="summary-value" id="result-maxcombo">0</span></div>
+    </div>
+    <div class="grade-panel" id="result-grade-panel"></div>
+    <div class="histogram-label">판정 오차 분포 (FAST ← 0 → SLOW)</div>
+    <div class="histogram" id="result-histogram"></div>
+    <button id="restart-btn">다시하기</button>
+  </div>
 `;
 
 const timeDisplay = document.querySelector<HTMLSpanElement>("#time-display")!;
@@ -58,24 +95,13 @@ const gradePanel = document.querySelector<HTMLDivElement>("#grade-panel")!;
 const startBtn = document.querySelector<HTMLButtonElement>("#start-btn")!;
 const canvas = document.querySelector<HTMLCanvasElement>("#game-canvas")!;
 const ctx = canvas.getContext("2d")!;
+const resultsPanel = document.querySelector<HTMLDivElement>("#results-panel")!;
+const resultGradePanel = document.querySelector<HTMLDivElement>("#result-grade-panel")!;
+const resultHistogram = document.querySelector<HTMLDivElement>("#result-histogram")!;
+const restartBtn = document.querySelector<HTMLButtonElement>("#restart-btn")!;
 
-const GRADE_ORDER = ["PERFECT_PLUS", "PERFECT", "GREAT", "GOOD", "MISS"] as const;
-gradePanel.innerHTML = GRADE_ORDER.map(
-  (grade) => `
-    <div class="grade-stat">
-      <span class="grade-label">${grade.replace("_PLUS", "+")}</span>
-      <span class="grade-value" id="grade-${grade}">0</span>
-    </div>`,
-).join("");
-gradePanel.innerHTML += `
-  <div class="grade-stat">
-    <span class="grade-label">FAST</span>
-    <span class="grade-value" id="fast-count">0</span>
-  </div>
-  <div class="grade-stat">
-    <span class="grade-label">SLOW</span>
-    <span class="grade-value" id="slow-count">0</span>
-  </div>`;
+gradePanel.innerHTML = gradePanelHtml("grade");
+resultGradePanel.innerHTML = gradePanelHtml("result-grade");
 
 const canvasWidth = CANVAS_WIDTH_OPTIONS[DEFAULT_CANVAS_WIDTH_OPTION];
 const dpr = window.devicePixelRatio || 1;
@@ -87,9 +113,11 @@ ctx.scale(dpr, dpr);
 
 const layout = computeLaneLayout(canvasWidth, DEFAULT_SCRATCH_SIDE);
 const chart = parseChart(dummyChartRaw);
-const noteTracker = createNoteTracker(chart);
 
 const clock = new AudioClock();
+type Phase = "playing" | "results";
+let phase: Phase = "playing";
+let noteTracker = createNoteTracker(chart);
 let gameState = createGameState();
 let judgmentTicks: JudgmentTick[] = [];
 let latestJudgment: LatestJudgment | null = null;
@@ -108,12 +136,43 @@ function updateHud(): void {
   for (const grade of GRADE_ORDER) {
     document.querySelector(`#grade-${grade}`)!.textContent = String(gameState.gradeCounts[grade]);
   }
-  document.querySelector("#fast-count")!.textContent = String(gameState.fastCount);
-  document.querySelector("#slow-count")!.textContent = String(gameState.slowCount);
+  document.querySelector("#grade-fast")!.textContent = String(gameState.fastCount);
+  document.querySelector("#grade-slow")!.textContent = String(gameState.slowCount);
+}
+
+function renderHistogram(counts: readonly number[]): void {
+  const maxCount = Math.max(1, ...counts);
+  resultHistogram.innerHTML = counts
+    .map((count, i) => {
+      const heightPercent = (count / maxCount) * 100;
+      const side = i < counts.length / 2 ? "fast" : "slow";
+      return `<div class="hist-bar hist-bar-${side}" style="height:${heightPercent}%" title="${count}건"></div>`;
+    })
+    .join("");
+}
+
+function showResults(): void {
+  phase = "results";
+  const summary = computeResults(chart, gameState, noteTracker);
+
+  document.querySelector("#result-score")!.textContent = String(summary.score);
+  document.querySelector("#result-theoretical")!.textContent = String(summary.theoreticalMax);
+  document.querySelector("#result-accuracy")!.textContent = `${summary.accuracyPercent.toFixed(2)}%`;
+  document.querySelector("#result-maxcombo")!.textContent = String(summary.maxCombo);
+  for (const grade of GRADE_ORDER) {
+    document.querySelector(`#result-grade-${grade}`)!.textContent = String(summary.gradeCounts[grade]);
+  }
+  document.querySelector("#result-grade-fast")!.textContent = String(summary.fastCount);
+  document.querySelector("#result-grade-slow")!.textContent = String(summary.slowCount);
+  renderHistogram(summary.errorHistogram);
+
+  canvas.hidden = true;
+  resultsPanel.hidden = false;
 }
 
 // 판정은 keydown 발생 즉시 계산한다 — rAF/프레임 타이밍과 무관 (SPEC.md 1절).
 function handleKeydown(event: KeyboardEvent): void {
+  if (phase !== "playing") return;
   if (event.repeat) return;
   if (!clock.isRunning) return;
 
@@ -168,12 +227,34 @@ function renderLoop(): void {
   drawJudgmentBar(ctx, layout, judgmentTicks, currentTimeMs);
   drawJudgmentText(ctx, layout, latestJudgment, currentTimeMs);
 
+  if (isChartComplete(chart, currentTimeMs, AUTO_MISS_WINDOW_MS)) {
+    showResults();
+    return;
+  }
+
   requestAnimationFrame(renderLoop);
 }
 
-startBtn.addEventListener("click", async () => {
+async function startPlay(): Promise<void> {
+  noteTracker = createNoteTracker(chart);
+  gameState = createGameState();
+  judgmentTicks = [];
+  latestJudgment = null;
+  phase = "playing";
+  canvas.hidden = false;
+  resultsPanel.hidden = true;
+  updateHud();
+
   await clock.start();
+  renderLoop();
+}
+
+startBtn.addEventListener("click", async () => {
   startBtn.disabled = true;
   startBtn.textContent = "실행 중";
-  renderLoop();
+  await startPlay();
+});
+
+restartBtn.addEventListener("click", async () => {
+  await startPlay();
 });

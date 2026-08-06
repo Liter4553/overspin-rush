@@ -1,5 +1,6 @@
 // 게임 전역 상수. 매직넘버 금지 — 값은 전부 여기서 관리한다.
 import type { JudgeTableEntry } from "./core/judge";
+import type { NoteLane } from "./chart/types";
 
 // 마일스톤 1 임시 표시용 기본 BPM. 이후 채보 로드 시 bpmChanges로 대체된다.
 export const DEFAULT_BPM = 150;
@@ -99,3 +100,12 @@ export const DEFAULT_HOLD_TICK_INTERVAL_BEATS = 1;
 
 // 판정 텍스트가 화면에 머무는 시간(ms). 애니메이션은 마일스톤 9에서.
 export const JUDGE_TEXT_DISPLAY_MS = 500;
+
+// --- 결과 화면 (SPEC.md 5절) ---
+// 지금 실제로 판정되는 레인. 마일스톤 5(스크래치)/7(FX)에서 판정이 붙으면
+// 여기에 추가하기만 하면 이론치/완료 판정이 자동으로 확장된다.
+export const JUDGEABLE_LANES: readonly NoteLane[] = [0, 1, 2];
+
+// 오차 분포 히스토그램 버킷 폭(ms). JUDGMENT_BAR_RANGE_MS(80)를 이 값으로 나눠
+// 좌우 대칭 버킷 개수를 만든다.
+export const ERROR_HISTOGRAM_BUCKET_MS = 10;
