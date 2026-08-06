@@ -89,6 +89,52 @@ h1 {
   background: #0e0f14;
 }
 
+.canvas-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.pause-panel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(11, 13, 18, 0.8);
+  border-radius: 4px;
+}
+
+.pause-panel[hidden] {
+  display: none;
+}
+
+.pause-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.pause-inner h2 {
+  margin: 0;
+  letter-spacing: 0.15em;
+  color: #7dd3fc;
+}
+
+#resume-btn {
+  padding: 12px 32px;
+  font-size: 1rem;
+  border: 1px solid #7dd3fc;
+  border-radius: 6px;
+  background: transparent;
+  color: #7dd3fc;
+  cursor: pointer;
+}
+
+#resume-btn:hover {
+  background: #7dd3fc22;
+}
+
 .grade-panel {
   display: flex;
   flex-wrap: wrap;

@@ -5,15 +5,22 @@ import { parseChart } from "./chart/parseChart";
 import { dummyChartRaw } from "./chart/dummyChart";
 import { computeLaneLayout } from "./render/canvas";
 import { drawFxNotes, drawJudgeLine, drawLaneBackground, drawNotes } from "./render/noteRenderer";
-import { addJudgmentTick, drawJudgmentBar, type JudgmentTick } from "./render/judgmentBar";
+import { addJudgmentTick, drawJudgmentBar, type JudgmentTick, type TickSource } from "./render/judgmentBar";
 import { drawJudgmentText, type LatestJudgment } from "./render/judgmentText";
 import { applyAutoMiss, createNoteTracker, findNearestPendingNote, markJudged } from "./core/noteState";
 import { applyJudgement, createGameState } from "./core/gameState";
 import { computeErrorMs, displaySign, judge } from "./core/judge";
 import { resolveLaneFromKey } from "./input/keyboard";
+import {
+  accumulateMovement,
+  applyScratchDirection,
+  createScratchAccumulator,
+  createScratchDirectionState,
+} from "./core/scratchInput";
 import { isChartComplete } from "./core/chartCompletion";
 import { computeResults } from "./core/results";
 import { computeFitScale } from "./render/viewportScale";
+import type { NoteLane } from "./chart/types";
 import {
   AUDIO_OFFSET_MS,
   AUTO_MISS_WINDOW_MS,
@@ -26,7 +33,11 @@ import {
   INPUT_OFFSET_MS,
   JUDGEABLE_LANES,
   NOTE_JUDGMENT_TABLE,
+  PAUSE_TRIGGER_KEY,
   RESULTS_SCALE_BOOST,
+  SCRATCH_DIR_RESET_MS,
+  SCRATCH_JUDGMENT_TABLE,
+  SCRATCH_THRESHOLD,
   VIEWPORT_FIT_MARGIN_PX,
   VIEWPORT_FIT_MAX_SCALE,
   VIEWPORT_FIT_MIN_SCALE,
@@ -77,7 +88,15 @@ app.innerHTML = `
         <span class="stat-value" id="score-display">0</span>
       </div>
     </div>
-    <canvas id="game-canvas"></canvas>
+    <div class="canvas-wrap">
+      <canvas id="game-canvas"></canvas>
+      <div class="pause-panel" id="pause-panel" hidden>
+        <div class="pause-inner">
+          <h2>PAUSE</h2>
+          <button id="resume-btn">재개</button>
+        </div>
+      </div>
+    </div>
     <div class="grade-panel" id="grade-panel"></div>
     <button id="start-btn">시작</button>
   </div>
@@ -110,6 +129,8 @@ const startBtn = document.querySelector<HTMLButtonElement>("#start-btn")!;
 const canvas = document.querySelector<HTMLCanvasElement>("#game-canvas")!;
 const ctx = canvas.getContext("2d")!;
 const gameplayView = document.querySelector<HTMLDivElement>("#gameplay-view")!;
+const pausePanel = document.querySelector<HTMLDivElement>("#pause-panel")!;
+const resumeBtn = document.querySelector<HTMLButtonElement>("#resume-btn")!;
 const resultsPanel = document.querySelector<HTMLDivElement>("#results-panel")!;
 const resultGradePanel = document.querySelector<HTMLDivElement>("#result-grade-panel")!;
 const resultHistogram = document.querySelector<HTMLDivElement>("#result-histogram")!;
@@ -141,7 +162,7 @@ const naturalWidth = app.scrollWidth;
 const naturalHeight = app.scrollHeight;
 
 const clock = new AudioClock();
-type Phase = "playing" | "results";
+type Phase = "playing" | "paused" | "results";
 let phase: Phase = "playing";
 let baseFitScale = 1;
 
@@ -175,6 +196,8 @@ let noteTracker = createNoteTracker(chart);
 let gameState = createGameState();
 let judgmentTicks: JudgmentTick[] = [];
 let latestJudgment: LatestJudgment | null = null;
+let scratchAccumulator = createScratchAccumulator();
+let scratchDirectionState = createScratchDirectionState();
 
 function formatTime(seconds: number): string {
   const clamped = Math.max(0, seconds);
@@ -225,8 +248,62 @@ function showResults(): void {
   applyZoom();
 }
 
+// 레인 타입에 따라 다른 판정 테이블을 골라 판정 1건을 처리한다.
+// 키보드(A/S/D)와 스크래치 입력이 이 함수 하나를 공유한다.
+function judgeAndApply(lane: NoteLane, inputTimeMs: number, source: TickSource): void {
+  const table = lane === "scratch" ? SCRATCH_JUDGMENT_TABLE : NOTE_JUDGMENT_TABLE;
+  const found = findNearestPendingNote(noteTracker, lane, inputTimeMs, AUTO_MISS_WINDOW_MS);
+  if (found === null) return; // 판정 가능한 노트가 없으면 조용히 무시
+
+  const errorMs = computeErrorMs(inputTimeMs, found.note.time, AUDIO_OFFSET_MS, INPUT_OFFSET_MS);
+  const result = judge(Math.abs(errorMs), table);
+  const sign = displaySign(result.grade, errorMs);
+
+  markJudged(found, result.grade, errorMs);
+  gameState = applyJudgement(gameState, result.grade, result.score, sign);
+  judgmentTicks = addJudgmentTick(judgmentTicks, {
+    errorMs,
+    grade: result.grade,
+    source,
+    createdAtMs: clock.currentTime * 1000,
+  });
+  latestJudgment = { grade: result.grade, sign, shownAtMs: clock.currentTime * 1000 };
+  updateHud();
+}
+
+async function pauseGame(): Promise<void> {
+  if (phase !== "playing") return;
+  phase = "paused";
+  await clock.pause();
+  pausePanel.hidden = false;
+}
+
+async function resumeGame(): Promise<void> {
+  if (phase !== "paused") return;
+  phase = "playing";
+  pausePanel.hidden = true;
+  canvas.requestPointerLock();
+  await clock.resume();
+  renderLoop();
+}
+
+resumeBtn.addEventListener("click", () => {
+  void resumeGame();
+});
+
+// ESC 또는 Pointer Lock 해제(Esc로 풀리는 경우 포함) 시 항상 같은 일시정지로 처리한다.
+document.addEventListener("pointerlockchange", () => {
+  if (document.pointerLockElement !== canvas) {
+    void pauseGame();
+  }
+});
+
 // 판정은 keydown 발생 즉시 계산한다 — rAF/프레임 타이밍과 무관 (SPEC.md 1절).
 function handleKeydown(event: KeyboardEvent): void {
+  if (event.key === PAUSE_TRIGGER_KEY) {
+    void pauseGame();
+    return;
+  }
   if (phase !== "playing") return;
   if (event.repeat) return;
   if (!clock.isRunning) return;
@@ -235,32 +312,38 @@ function handleKeydown(event: KeyboardEvent): void {
   if (lane === null) return;
 
   const inputTimeMs = clock.toGameTime(event.timeStamp) * 1000;
-  const found = findNearestPendingNote(noteTracker, lane, inputTimeMs, AUTO_MISS_WINDOW_MS);
-  if (found === null) return; // 판정 가능한 노트가 없으면 조용히 무시
-
-  const errorMs = computeErrorMs(inputTimeMs, found.note.time, AUDIO_OFFSET_MS, INPUT_OFFSET_MS);
-  const result = judge(Math.abs(errorMs), NOTE_JUDGMENT_TABLE);
-  const sign = displaySign(result.grade, errorMs);
-
-  markJudged(found, result.grade, errorMs);
-  gameState = applyJudgement(gameState, result.grade, result.score, sign);
-  judgmentTicks = addJudgmentTick(judgmentTicks, {
-    errorMs,
-    grade: result.grade,
-    source: "key",
-    createdAtMs: clock.currentTime * 1000,
-  });
-  latestJudgment = { grade: result.grade, sign, shownAtMs: clock.currentTime * 1000 };
-  updateHud();
+  judgeAndApply(lane, inputTimeMs, "key");
 }
 
 window.addEventListener("keydown", handleKeydown);
 
+// 스크래치는 Pointer Lock 중에만 movementY를 받는다. 누적->임계값->방향 상태
+// 머신을 거쳐 유효한 방향 전환일 때만 판정 파이프라인을 태운다.
+function handleMouseMove(event: MouseEvent): void {
+  if (phase !== "playing") return;
+  if (document.pointerLockElement !== canvas) return;
+
+  const accResult = accumulateMovement(scratchAccumulator, event.movementY, SCRATCH_THRESHOLD);
+  scratchAccumulator = accResult.state;
+  if (accResult.direction === null) return;
+
+  const inputTimeMs = clock.toGameTime(event.timeStamp) * 1000;
+  const dirResult = applyScratchDirection(scratchDirectionState, accResult.direction, inputTimeMs, SCRATCH_DIR_RESET_MS);
+  scratchDirectionState = dirResult.state;
+  if (!dirResult.valid) return; // 무효 입력(같은 방향 연속)은 조용히 무시, 노트 소모 없음
+
+  judgeAndApply("scratch", inputTimeMs, "scratch");
+}
+
+document.addEventListener("mousemove", handleMouseMove);
+
 // rAF는 렌더링 전용. 판정 로직에는 절대 쓰지 않는다 — 여기서는 화면 갱신만 담당.
 function renderLoop(): void {
+  if (phase !== "playing") return; // 일시정지/결과 화면이면 루프를 멈춘다
+
   const currentTimeMs = clock.currentTime * 1000;
 
-  // 아직 판정이 붙지 않은 레인(FX/스크래치)은 자동 MISS 대상에서 제외한다.
+  // 아직 판정이 붙지 않은 레인(FX)은 자동 MISS 대상에서 제외한다.
   const judgeableTracked = noteTracker.filter((t) => JUDGEABLE_LANES.includes(t.note.lane));
   const newlyMissed = applyAutoMiss(judgeableTracked, currentTimeMs, AUTO_MISS_WINDOW_MS);
   if (newlyMissed.length > 0) {
@@ -297,11 +380,17 @@ async function startPlay(): Promise<void> {
   gameState = createGameState();
   judgmentTicks = [];
   latestJudgment = null;
+  scratchAccumulator = createScratchAccumulator();
+  scratchDirectionState = createScratchDirectionState();
   phase = "playing";
   gameplayView.hidden = false;
   resultsPanel.hidden = true;
+  pausePanel.hidden = true;
   applyZoom();
   updateHud();
+
+  // Pointer Lock 요청은 사용자 제스처 컨텍스트를 유지하기 위해 첫 await 이전에 호출한다.
+  canvas.requestPointerLock();
 
   await clock.start();
   renderLoop();

@@ -12,6 +12,10 @@ class FakeAudioContext {
     this.state = "running";
   }
 
+  async suspend() {
+    this.state = "suspended";
+  }
+
   getOutputTimestamp() {
     return { contextTime: this.outputContextTime, performanceTime: this.outputPerformanceTime };
   }
@@ -65,5 +69,27 @@ describe("AudioClock", () => {
   it("시작 전에는 toGameTime이 0을 반환한다", () => {
     const clock = new AudioClock(new FakeAudioContext() as unknown as AudioContext);
     expect(clock.toGameTime(12345)).toBe(0);
+  });
+
+  it("pause()는 AudioContext를 suspend시키고, isPaused가 true가 된다", async () => {
+    const ctx = new FakeAudioContext();
+    const clock = new AudioClock(ctx as unknown as AudioContext);
+    await clock.start();
+    await clock.pause();
+    expect(ctx.state).toBe("suspended");
+    expect(clock.isPaused).toBe(true);
+  });
+
+  it("resume()은 다시 running으로 되돌리고, 정지된 지점부터 이어진다", async () => {
+    const ctx = new FakeAudioContext();
+    const clock = new AudioClock(ctx as unknown as AudioContext);
+    await clock.start();
+    ctx.currentTime = 2;
+    await clock.pause();
+    // 정지 중에는 ctx.currentTime이 진행되지 않는다고 가정(테스트에서는 그대로 둠)
+    await clock.resume();
+    expect(ctx.state).toBe("running");
+    expect(clock.isPaused).toBe(false);
+    expect(clock.currentTime).toBeCloseTo(2);
   });
 });

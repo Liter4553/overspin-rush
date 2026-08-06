@@ -122,7 +122,7 @@ describe("판정 흐름 통합 (judge + noteState + gameState)", () => {
     expect(state.gradeCounts.MISS).toBe(1);
   });
 
-  it("main.ts와 동일하게 JUDGEABLE_LANES로 필터링하면 FX/스크래치는 자동 MISS 대상에서 제외된다 (회귀 테스트)", () => {
+  it("main.ts와 동일하게 JUDGEABLE_LANES로 필터링하면 FX는 자동 MISS 대상에서 제외된다 (회귀 테스트)", () => {
     const chart = makeChart([
       { time: 1000, lane: 0, type: "tap" },
       { time: 1000, lane: "fx", type: "tap" },
@@ -134,10 +134,10 @@ describe("판정 흐름 통합 (judge + noteState + gameState)", () => {
     const judgeableTracked = tracker.filter((t) => JUDGEABLE_LANES.includes(t.note.lane));
     const missed = applyAutoMiss(judgeableTracked, 1081, AUTO_MISS_WINDOW_MS);
 
-    expect(missed).toHaveLength(1); // 노트 레인 0만 MISS
+    expect(missed).toHaveLength(2); // 노트 레인 0 + 스크래치, FX는 제외
     const fxEntry = tracker.find((t) => t.note.lane === "fx")!;
     const scratchEntry = tracker.find((t) => t.note.lane === "scratch")!;
     expect(fxEntry.state).toBe("pending"); // FX는 아직 판정 시스템이 안 붙었으니 pending 유지
-    expect(scratchEntry.state).toBe("pending");
+    expect(scratchEntry.state).toBe("judged"); // 스크래치는 이제 판정 대상
   });
 });

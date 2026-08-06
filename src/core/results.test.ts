@@ -34,7 +34,7 @@ describe("computeErrorHistogram", () => {
 });
 
 describe("computeResults", () => {
-  it("판정 대상(A/S/D) 노트 개수 기준으로 이론치를 계산하고 FX/스크래치는 제외한다", () => {
+  it("판정 대상(A/S/D+스크래치) 노트 개수 기준으로 이론치를 계산하고 FX는 제외한다", () => {
     const chart = makeChart([
       { time: 1000, lane: 0, type: "tap" },
       { time: 1500, lane: 1, type: "tap" },
@@ -42,7 +42,7 @@ describe("computeResults", () => {
       { time: 2500, lane: "scratch", type: "tap" },
     ]);
     const results = computeResults(chart, createGameState(), createNoteTracker(chart));
-    expect(results.theoreticalMax).toBe(2 * 4); // fx/scratch 제외, 노트 2개만
+    expect(results.theoreticalMax).toBe(3 * 4); // fx 제외, 노트 2개+스크래치 1개
   });
 
   it("만점 시 정확도가 100%다", () => {

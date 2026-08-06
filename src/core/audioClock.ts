@@ -16,12 +16,30 @@ export class AudioClock {
     return this.startedAt !== null;
   }
 
+  get isPaused(): boolean {
+    return this.startedAt !== null && this.ctx.state === "suspended";
+  }
+
   // 브라우저 자동재생 정책 때문에 사용자 제스처 안에서 호출해야 한다.
   async start(): Promise<void> {
     if (this.ctx.state === "suspended") {
       await this.ctx.resume();
     }
     this.startedAt = this.ctx.currentTime;
+  }
+
+  // AudioContext 자체를 정지시켜 currentTime 진행을 멈춘다. 별도 오프셋
+  // 계산 없이 resume()하면 정지된 지점부터 자연스럽게 이어진다.
+  async pause(): Promise<void> {
+    if (this.ctx.state === "running") {
+      await this.ctx.suspend();
+    }
+  }
+
+  async resume(): Promise<void> {
+    if (this.ctx.state === "suspended") {
+      await this.ctx.resume();
+    }
   }
 
   // 클럭 시작 시점 기준 경과 시간(초).

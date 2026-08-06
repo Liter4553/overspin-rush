@@ -102,9 +102,9 @@ export const DEFAULT_HOLD_TICK_INTERVAL_BEATS = 1;
 export const JUDGE_TEXT_DISPLAY_MS = 500;
 
 // --- 결과 화면 (SPEC.md 5절) ---
-// 지금 실제로 판정되는 레인. 마일스톤 5(스크래치)/7(FX)에서 판정이 붙으면
+// 지금 실제로 판정되는 레인. 마일스톤 7(FX)에서 판정이 붙으면
 // 여기에 추가하기만 하면 이론치/완료 판정이 자동으로 확장된다.
-export const JUDGEABLE_LANES: readonly NoteLane[] = [0, 1, 2];
+export const JUDGEABLE_LANES: readonly NoteLane[] = [0, 1, 2, "scratch"];
 
 // 오차 분포 히스토그램 버킷 폭(ms). JUDGMENT_BAR_RANGE_MS(80)를 이 값으로 나눠
 // 좌우 대칭 버킷 개수를 만든다.
@@ -119,3 +119,14 @@ export const VIEWPORT_FIT_MAX_SCALE = 1.8;
 // 결과 화면은 콘텐츠가 적어서 게임 화면과 같은 배율이면 상대적으로 작아 보인다.
 // 게임 화면 맞춤 배율(scale) 위에 이 배수를 추가로 곱해서 더 크게 보여준다.
 export const RESULTS_SCALE_BOOST = 1.46;
+
+// --- 스크래치 입력 (SPEC.md 2절) ---
+// mousemove movementY 누적이 이 값(px)을 넘으면 스크래치 입력 1회로 인정.
+export const SCRATCH_THRESHOLD = 20;
+// 마지막 유효 스크래치로부터 이 시간(ms)이 지나면 방향 제한이 풀린다.
+export const SCRATCH_DIR_RESET_MS = 2000;
+
+// --- 일시정지 ---
+// ESC 또는 Pointer Lock 해제 시 일시정지(SPEC.md 9절 폴리싱의 일시정지를
+// Pointer Lock 요구사항 때문에 최소 기능으로 앞당겨 구현).
+export const PAUSE_TRIGGER_KEY = "Escape";

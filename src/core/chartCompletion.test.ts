@@ -26,13 +26,21 @@ describe("isChartComplete", () => {
     expect(isChartComplete(chart, 1081, 80)).toBe(true);
   });
 
-  it("판정 대상이 아닌 레인(fx/scratch)의 늦은 노트는 완료 판정에 영향을 주지 않는다", () => {
+  it("판정 대상이 아닌 레인(fx)의 늦은 노트는 완료 판정에 영향을 주지 않는다", () => {
     const chart = makeChart([
       { time: 1000, lane: 0, type: "tap" },
       { time: 9000, lane: "fx", type: "tap" },
-      { time: 9500, lane: "scratch", type: "tap" },
     ]);
     expect(isChartComplete(chart, 1081, 80)).toBe(true);
+  });
+
+  it("스크래치는 이제 판정 대상이라 완료 판정에 포함된다", () => {
+    const chart = makeChart([
+      { time: 1000, lane: 0, type: "tap" },
+      { time: 9500, lane: "scratch", type: "tap" },
+    ]);
+    expect(isChartComplete(chart, 1081, 80)).toBe(false);
+    expect(isChartComplete(chart, 9581, 80)).toBe(true);
   });
 
   it("판정 대상 노트가 하나도 없으면 즉시 완료다", () => {
