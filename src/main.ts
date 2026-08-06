@@ -13,6 +13,7 @@ import { computeErrorMs, displaySign, judge } from "./core/judge";
 import { resolveLaneFromKey } from "./input/keyboard";
 import { isChartComplete } from "./core/chartCompletion";
 import { computeResults } from "./core/results";
+import { computeFitScale } from "./render/viewportScale";
 import {
   AUDIO_OFFSET_MS,
   AUTO_MISS_WINDOW_MS,
@@ -25,6 +26,9 @@ import {
   INPUT_OFFSET_MS,
   JUDGEABLE_LANES,
   NOTE_JUDGMENT_TABLE,
+  VIEWPORT_FIT_MARGIN_PX,
+  VIEWPORT_FIT_MAX_SCALE,
+  VIEWPORT_FIT_MIN_SCALE,
 } from "./config";
 
 const GRADE_ORDER = ["PERFECT_PLUS", "PERFECT", "GREAT", "GOOD", "MISS"] as const;
@@ -115,14 +119,45 @@ resultGradePanel.innerHTML = gradePanelHtml("result-grade", false);
 
 const canvasWidth = CANVAS_WIDTH_OPTIONS[DEFAULT_CANVAS_WIDTH_OPTION];
 const dpr = window.devicePixelRatio || 1;
-canvas.width = canvasWidth * dpr;
-canvas.height = CANVAS_HEIGHT * dpr;
 canvas.style.width = `${canvasWidth}px`;
 canvas.style.height = `${CANVAS_HEIGHT}px`;
-ctx.scale(dpr, dpr);
 
 const layout = computeLaneLayout(canvasWidth, DEFAULT_SCRATCH_SIDE);
 const chart = parseChart(dummyChartRaw);
+
+// 캔버스 비트맵 해상도를 dpr과 화면 맞춤 배율(uiScale) 둘 다 반영해서 설정한다.
+// 그래야 #app을 zoom으로 확대해도 캔버스가 흐려지지 않는다.
+function setCanvasResolution(uiScale: number): void {
+  const effectiveScale = dpr * uiScale;
+  canvas.width = Math.round(canvasWidth * effectiveScale);
+  canvas.height = Math.round(CANVAS_HEIGHT * effectiveScale);
+  ctx.setTransform(effectiveScale, 0, 0, effectiveScale, 0, 0);
+}
+
+// 확대 전(zoom=1) 상태에서 자연 크기를 한 번만 측정해둔다. 결과 화면도 같은
+// 배율을 그대로 재사용해야 하므로, 결과 화면이 아닌 게임 화면(더 큰 쪽) 기준으로 잰다.
+const naturalWidth = app.scrollWidth;
+const naturalHeight = app.scrollHeight;
+
+function fitToViewport(): void {
+  const availableWidth = window.innerWidth - VIEWPORT_FIT_MARGIN_PX;
+  const availableHeight = window.innerHeight - VIEWPORT_FIT_MARGIN_PX;
+  const scale = computeFitScale(
+    naturalWidth,
+    naturalHeight,
+    availableWidth,
+    availableHeight,
+    VIEWPORT_FIT_MIN_SCALE,
+    VIEWPORT_FIT_MAX_SCALE,
+  );
+  // transform은 레이아웃 박스 크기를 바꾸지 않아 스크롤/중앙정렬이 어긋나므로
+  // 레이아웃까지 함께 반영되는 zoom을 쓴다.
+  app.style.setProperty("zoom", String(scale));
+  setCanvasResolution(scale);
+}
+
+fitToViewport();
+window.addEventListener("resize", fitToViewport);
 
 const clock = new AudioClock();
 type Phase = "playing" | "results";
