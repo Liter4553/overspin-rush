@@ -130,3 +130,6 @@ export const SCRATCH_DIR_RESET_MS = 2000;
 // ESC 또는 Pointer Lock 해제 시 일시정지(SPEC.md 9절 폴리싱의 일시정지를
 // Pointer Lock 요구사항 때문에 최소 기능으로 앞당겨 구현).
 export const PAUSE_TRIGGER_KEY = "Escape";
+// 재개 버튼을 누른 뒤 실제로 재생이 이어지기까지의 카운트다운(초).
+// 지금은 뼈대만 — 연출/스킵 등은 마일스톤 9(폴리싱)에서 다듬는다.
+export const RESUME_COUNTDOWN_SECONDS = 3;

@@ -135,6 +135,17 @@ h1 {
   background: #7dd3fc22;
 }
 
+.pause-countdown {
+  font-family: "Consolas", monospace;
+  font-size: 3rem;
+  font-variant-numeric: tabular-nums;
+  color: #7dd3fc;
+}
+
+.pause-countdown[hidden] {
+  display: none;
+}
+
 .grade-panel {
   display: flex;
   flex-wrap: wrap;

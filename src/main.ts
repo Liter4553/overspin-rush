@@ -35,6 +35,7 @@ import {
   NOTE_JUDGMENT_TABLE,
   PAUSE_TRIGGER_KEY,
   RESULTS_SCALE_BOOST,
+  RESUME_COUNTDOWN_SECONDS,
   SCRATCH_DIR_RESET_MS,
   SCRATCH_JUDGMENT_TABLE,
   SCRATCH_THRESHOLD,
@@ -93,6 +94,7 @@ app.innerHTML = `
       <div class="pause-panel" id="pause-panel" hidden>
         <div class="pause-inner">
           <h2>PAUSE</h2>
+          <div class="pause-countdown" id="pause-countdown" hidden></div>
           <button id="resume-btn">재개</button>
         </div>
       </div>
@@ -130,6 +132,7 @@ const canvas = document.querySelector<HTMLCanvasElement>("#game-canvas")!;
 const ctx = canvas.getContext("2d")!;
 const gameplayView = document.querySelector<HTMLDivElement>("#gameplay-view")!;
 const pausePanel = document.querySelector<HTMLDivElement>("#pause-panel")!;
+const pauseCountdown = document.querySelector<HTMLDivElement>("#pause-countdown")!;
 const resumeBtn = document.querySelector<HTMLButtonElement>("#resume-btn")!;
 const resultsPanel = document.querySelector<HTMLDivElement>("#results-panel")!;
 const resultGradePanel = document.querySelector<HTMLDivElement>("#result-grade-panel")!;
@@ -162,7 +165,7 @@ const naturalWidth = app.scrollWidth;
 const naturalHeight = app.scrollHeight;
 
 const clock = new AudioClock();
-type Phase = "playing" | "paused" | "results";
+type Phase = "playing" | "paused" | "resuming" | "results";
 let phase: Phase = "playing";
 let baseFitScale = 1;
 
@@ -246,6 +249,12 @@ function showResults(): void {
   gameplayView.hidden = true;
   resultsPanel.hidden = false;
   applyZoom();
+
+  // Pointer Lock을 걸어둔 채 결과 화면으로 넘어가면 마우스 커서가 안 보이는
+  // 치명적인 문제가 있었다 — 결과 화면에서는 항상 잠금을 풀어준다.
+  if (document.pointerLockElement === canvas) {
+    document.exitPointerLock();
+  }
 }
 
 // 레인 타입에 따라 다른 판정 테이블을 골라 판정 1건을 처리한다.
@@ -271,18 +280,38 @@ function judgeAndApply(lane: NoteLane, inputTimeMs: number, source: TickSource):
   updateHud();
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function pauseGame(): Promise<void> {
   if (phase !== "playing") return;
   phase = "paused";
   await clock.pause();
+  resumeBtn.hidden = false;
+  pauseCountdown.hidden = true;
   pausePanel.hidden = false;
 }
 
+// 재개 클릭 -> 카운트다운(뼈대만, 연출/스킵 등은 마일스톤 9에서 다듬는다) -> 실제 재생 재개.
+// 카운트다운 동안은 phase가 "resuming"이라 키/스크래치 입력과 자동 MISS가 전부 멈춰있다.
 async function resumeGame(): Promise<void> {
   if (phase !== "paused") return;
+  phase = "resuming";
+
+  // Pointer Lock 재요청은 클릭이라는 사용자 제스처 컨텍스트를 유지하기 위해
+  // 카운트다운(setTimeout) 이전, 즉 첫 await 이전에 호출한다.
+  canvas.requestPointerLock();
+
+  resumeBtn.hidden = true;
+  pauseCountdown.hidden = false;
+  for (let seconds = RESUME_COUNTDOWN_SECONDS; seconds > 0; seconds--) {
+    pauseCountdown.textContent = String(seconds);
+    await delay(1000);
+  }
+
   phase = "playing";
   pausePanel.hidden = true;
-  canvas.requestPointerLock();
   await clock.resume();
   renderLoop();
 }
