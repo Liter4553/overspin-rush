@@ -4,7 +4,7 @@ import { DEFAULT_BPM } from "./config";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
-  <h1>DJ RUSH</h1>
+  <h1>Overspin RUSH</h1>
   <div class="clock-panel">
     <div class="stat">
       <span class="stat-label">TIME</span>
