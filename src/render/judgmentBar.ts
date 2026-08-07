@@ -80,20 +80,10 @@ export function drawJudgmentBar(
     ctx.strokeStyle = JUDGE_GRADE_COLORS[tick.grade];
     ctx.lineWidth = 2;
     ctx.beginPath();
-    if (tick.source === "scratch") {
-      // 스크래치 눈금은 마름모 형태로 키 입력과 구분.
-      const half = 5;
-      ctx.moveTo(x, barY - half);
-      ctx.lineTo(x + half, barY + JUDGMENT_BAR_HEIGHT / 2);
-      ctx.lineTo(x, barY + JUDGMENT_BAR_HEIGHT + half);
-      ctx.lineTo(x - half, barY + JUDGMENT_BAR_HEIGHT / 2);
-      ctx.closePath();
-      ctx.stroke();
-    } else {
-      ctx.moveTo(x, barY);
-      ctx.lineTo(x, barY + JUDGMENT_BAR_HEIGHT);
-      ctx.stroke();
-    }
+    // 스크래치와 키 입력 눈금을 동일한 막대 형태로 그린다(모양 구분 없음).
+    ctx.moveTo(x, barY);
+    ctx.lineTo(x, barY + JUDGMENT_BAR_HEIGHT);
+    ctx.stroke();
   }
   ctx.globalAlpha = 1;
 

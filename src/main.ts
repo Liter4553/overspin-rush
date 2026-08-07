@@ -327,6 +327,16 @@ document.addEventListener("pointerlockchange", () => {
   }
 });
 
+// 브라우저가 Esc 해제 직후 재잠금 요청을 짧게 쿨다운시키는 경우가 있어
+// (재개 시점의 requestPointerLock이 조용히 실패할 수 있음), 플레이 중에는
+// 어디를 클릭하든 잠금이 풀려 있으면 즉시 재요청한다. PAUSE를 누르지 않는 한
+// 마우스가 계속 스크래치로 인식돼야 한다는 요구사항에 대한 안전망.
+document.addEventListener("click", () => {
+  if (phase === "playing" && document.pointerLockElement !== canvas) {
+    canvas.requestPointerLock();
+  }
+});
+
 // 판정은 keydown 발생 즉시 계산한다 — rAF/프레임 타이밍과 무관 (SPEC.md 1절).
 function handleKeydown(event: KeyboardEvent): void {
   if (event.key === PAUSE_TRIGGER_KEY) {
