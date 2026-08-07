@@ -12,6 +12,7 @@ import { applyHoldTick, applyJudgement, createGameState } from "./core/gameState
 import { computeErrorMs, displaySign, judge } from "./core/judge";
 import { advanceHoldTicks, computeTickIntervalMs, startActiveHold, type ActiveHold } from "./core/holdState";
 import { clampSpeed, greenNumberMsToSpeed, speedToGreenNumberMs } from "./core/speedOptions";
+import { applyArrangement, type Arrangement } from "./core/laneArrangement";
 import { resolveLaneFromKey } from "./input/keyboard";
 import {
   accumulateMovement,
@@ -22,7 +23,7 @@ import {
 import { isChartComplete } from "./core/chartCompletion";
 import { computeResults } from "./core/results";
 import { computeFitScale } from "./render/viewportScale";
-import type { NoteLane } from "./chart/types";
+import type { Chart, NoteLane } from "./chart/types";
 import {
   AUDIO_OFFSET_MS,
   AUTO_MISS_WINDOW_MS,
@@ -98,6 +99,10 @@ app.innerHTML = `
       <label for="option-green-number">그린넘버(ms)</label>
       <input type="number" id="option-green-number" min="${GREEN_NUMBER_MIN_MS}" max="${GREEN_NUMBER_MAX_MS}" value="${BASE_GREEN_NUMBER_MS}" />
     </div>
+    <div class="option-row">
+      <label for="option-arrangement-toggle">노트 배치</label>
+      <button type="button" id="option-arrangement-toggle">정배</button>
+    </div>
     <button id="options-start-btn">시작</button>
   </div>
 
@@ -166,6 +171,7 @@ const optionsView = document.querySelector<HTMLDivElement>("#options-view")!;
 const optionCanvasWidthSelect = document.querySelector<HTMLSelectElement>("#option-canvas-width")!;
 const optionSpeedInput = document.querySelector<HTMLInputElement>("#option-speed")!;
 const optionGreenNumberInput = document.querySelector<HTMLInputElement>("#option-green-number")!;
+const optionArrangementToggle = document.querySelector<HTMLButtonElement>("#option-arrangement-toggle")!;
 const optionsStartBtn = document.querySelector<HTMLButtonElement>("#options-start-btn")!;
 const canvas = document.querySelector<HTMLCanvasElement>("#game-canvas")!;
 const ctx = canvas.getContext("2d")!;
@@ -186,6 +192,13 @@ let canvasWidth = CANVAS_WIDTH_OPTIONS[DEFAULT_CANVAS_WIDTH_OPTION];
 const dpr = window.devicePixelRatio || 1;
 let layout = computeLaneLayout(canvasWidth, DEFAULT_SCRATCH_SIDE);
 const chart = parseChart(dummyChartRaw);
+// 실제 플레이에 쓰이는 채보. 원본 chart는 절대 변형하지 않고, 배치 옵션을 적용한
+// 새 노트 배열로 매 플레이 시작 시 다시 만든다(SPEC.md 6절).
+let activeChart: Chart = chart;
+
+function buildPlayChart(baseChart: Chart, arrangement: Arrangement): Chart {
+  return { ...baseChart, notes: applyArrangement(baseChart.notes, arrangement) };
+}
 
 // 선택된 캔버스 폭을 실제 스타일/레이아웃에 반영한다. 옵션 화면 "시작" 클릭 시 호출.
 function applySelectedLayout(canvasWidthOption: CanvasWidthOption): void {
@@ -250,7 +263,7 @@ function fitToViewport(): void {
 
 window.addEventListener("resize", fitToViewport);
 
-let noteTracker = createNoteTracker(chart);
+let noteTracker = createNoteTracker(activeChart);
 let gameState = createGameState();
 let judgmentTicks: JudgmentTick[] = [];
 let latestJudgment: LatestJudgment | null = null;
@@ -261,6 +274,7 @@ let scratchDirectionState = createScratchDirectionState();
 let activeHolds = new Map<NoteLane, ActiveHold>();
 // 진짜 상태는 이 값 하나뿐(SPEC.md 6절) — 배속은 이 값을 표시/조작하는 입력 경로일 뿐이다.
 let effectiveGreenNumberMs = BASE_GREEN_NUMBER_MS;
+let selectedArrangement: Arrangement = "normal";
 
 function updateSpeedDisplay(): void {
   const speed = greenNumberMsToSpeed(effectiveGreenNumberMs, BASE_GREEN_NUMBER_MS);
@@ -298,7 +312,7 @@ function renderHistogram(counts: readonly number[]): void {
 
 function showResults(): void {
   phase = "results";
-  const summary = computeResults(chart, gameState, noteTracker);
+  const summary = computeResults(activeChart, gameState, noteTracker);
 
   document.querySelector("#result-score")!.textContent = String(summary.score);
   document.querySelector("#result-theoretical")!.textContent = String(summary.theoreticalMax);
@@ -342,10 +356,10 @@ function judgeAndApply(lane: NoteLane, inputTimeMs: number, source: TickSource):
   // 등록해두고, 실제 발생은 renderLoop가 매 프레임 audioClock 시각으로 계산한다.
   if (found.note.type === "hold") {
     const tickIntervalMs = computeTickIntervalMs(
-      chart.bpmChanges,
+      activeChart.bpmChanges,
       found.note.time,
       found.note.tickIntervalBeats,
-      chart.holdTickIntervalBeats,
+      activeChart.holdTickIntervalBeats,
     );
     activeHolds.set(lane, startActiveHold(found.note, tickIntervalMs));
   }
@@ -532,7 +546,7 @@ function renderLoop(): void {
   processHoldTicks(currentTimeMs);
 
   timeDisplay.textContent = formatTime(clock.currentTime);
-  bpmDisplay.textContent = String(currentBpm(chart.bpmChanges, currentTimeMs));
+  bpmDisplay.textContent = String(currentBpm(activeChart.bpmChanges, currentTimeMs));
 
   // 홀드는 시작 판정 즉시 state가 "judged"로 바뀌지만, 꼬리(time+duration)가 판정선을
   // 지날 때까지는 계속 그려야 한다 — 몸통이 누르자마자 사라지면 안 된다.
@@ -549,7 +563,7 @@ function renderLoop(): void {
   drawJudgmentText(ctx, layout, latestJudgment, currentTimeMs);
   drawComboDisplay(ctx, layout, gameState.combo);
 
-  if (isChartComplete(chart, currentTimeMs, AUTO_MISS_WINDOW_MS)) {
+  if (isChartComplete(activeChart, currentTimeMs, AUTO_MISS_WINDOW_MS)) {
     showResults();
     return;
   }
@@ -558,7 +572,8 @@ function renderLoop(): void {
 }
 
 async function startPlay(): Promise<void> {
-  noteTracker = createNoteTracker(chart);
+  activeChart = buildPlayChart(chart, selectedArrangement);
+  noteTracker = createNoteTracker(activeChart);
   gameState = createGameState();
   judgmentTicks = [];
   latestJudgment = null;
@@ -596,6 +611,12 @@ function syncGreenNumberFromInput(): void {
 
 optionSpeedInput.addEventListener("change", syncSpeedFromInput);
 optionGreenNumberInput.addEventListener("change", syncGreenNumberFromInput);
+
+const ARRANGEMENT_LABEL: Readonly<Record<Arrangement, string>> = { normal: "정배", mirror: "미러" };
+optionArrangementToggle.addEventListener("click", () => {
+  selectedArrangement = selectedArrangement === "normal" ? "mirror" : "normal";
+  optionArrangementToggle.textContent = ARRANGEMENT_LABEL[selectedArrangement];
+});
 
 optionsStartBtn.addEventListener("click", async () => {
   optionsStartBtn.disabled = true;
