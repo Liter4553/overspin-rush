@@ -144,7 +144,7 @@ h1 {
   background: #7dd3fc22;
 }
 
-#options-start-btn {
+#options-close-btn {
   padding: 12px 32px;
   font-size: 1rem;
   border: 1px solid #7dd3fc;
@@ -154,13 +154,232 @@ h1 {
   cursor: pointer;
 }
 
-#options-start-btn:hover {
+#options-close-btn:hover {
   background: #7dd3fc22;
 }
 
-#options-start-btn:disabled {
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(11, 13, 18, 0.7);
+  z-index: 10;
+}
+
+.modal-overlay[hidden] {
+  display: none;
+}
+
+/* --- 선곡 화면 --- */
+#song-select-view {
+  position: relative;
+  width: 480px;
+  height: 800px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #2a2c38;
+  border-radius: 8px;
+  background: #0e0f14;
+}
+
+#song-select-view[hidden] {
+  display: none;
+}
+
+#song-select-view h2 {
+  margin: 0;
+  padding: 20px 20px 0;
+  letter-spacing: 0.15em;
+  color: #7dd3fc;
+}
+
+.song-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 20px;
+}
+
+.song-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid #2a2c38;
+  border-radius: 6px;
+  background: #12161f;
+  color: #e8eaf0;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.song-item:hover {
+  border-color: #7dd3fc;
+}
+
+.song-item-jacket {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #378add, #5dcaa5);
+}
+
+.song-item-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.song-item-title {
+  font-weight: bold;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-item-artist {
+  font-size: 0.8rem;
+  color: #8b93a7;
+}
+
+.song-item-levels {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-end;
+}
+
+.level-badge {
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-family: "Consolas", monospace;
+  white-space: nowrap;
+}
+
+.level-easy {
+  background: #22b8cf33;
+  color: #22b8cf;
+}
+
+.level-normal {
+  background: #85b7eb33;
+  color: #85b7eb;
+}
+
+.level-hard {
+  background: #f0959533;
+  color: #f09595;
+}
+
+.song-popup {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 33.34%;
+  background: #161a24;
+  border-top: 1px solid #2a2c38;
+  transform: translateY(100%);
+  transition: transform 0.25s ease;
+}
+
+.song-popup.open {
+  transform: translateY(0);
+}
+
+.song-popup-inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 16px 20px;
+}
+
+.song-popup-jacket {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #378add, #5dcaa5);
+}
+
+.song-popup-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.song-popup-title {
+  font-weight: bold;
+  font-size: 1.1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-popup-artist {
+  font-size: 0.85rem;
+  color: #8b93a7;
+}
+
+.difficulty-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.difficulty-btn {
+  padding: 4px 10px;
+  border: 1px solid #2a2c38;
+  border-radius: 4px;
+  background: #12161f;
+  color: #e8eaf0;
+  font-family: "Consolas", monospace;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.difficulty-btn.active {
+  border-color: #7dd3fc;
+  color: #7dd3fc;
+}
+
+#song-popup-start-btn {
+  flex: none;
+  padding: 12px 20px;
+  font-size: 0.95rem;
+  border: 1px solid #7dd3fc;
+  border-radius: 6px;
+  background: transparent;
+  color: #7dd3fc;
+  cursor: pointer;
+}
+
+#song-popup-start-btn:hover {
+  background: #7dd3fc22;
+}
+
+#song-popup-start-btn:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.results-buttons {
+  display: flex;
+  gap: 12px;
 }
 
 #game-canvas {
@@ -356,7 +575,8 @@ h1 {
   background: #F09595;
 }
 
-#restart-btn {
+#restart-btn,
+#results-song-select-btn {
   padding: 12px 32px;
   font-size: 1rem;
   border: 1px solid #7dd3fc;
@@ -366,6 +586,7 @@ h1 {
   cursor: pointer;
 }
 
-#restart-btn:hover {
+#restart-btn:hover,
+#results-song-select-btn:hover {
   background: #7dd3fc22;
 }

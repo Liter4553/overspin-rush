@@ -32,6 +32,7 @@ import {
 import { isChartComplete } from "./core/chartCompletion";
 import { computeResults } from "./core/results";
 import { computeFitScale } from "./render/viewportScale";
+import { DIFFICULTIES, DIFFICULTY_LABEL, SONG_LIST, type Difficulty, type SongEntry } from "./chart/songList";
 import type { Chart, NoteLane } from "./chart/types";
 import {
   ACTIVE_PRESET_STORAGE_KEY,
@@ -100,6 +101,23 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
   <h1>Overspin RUSH</h1>
 
+  <div id="song-select-view">
+    <h2>선곡</h2>
+    <div class="song-list" id="song-list"></div>
+    <div class="song-popup" id="song-popup">
+      <div class="song-popup-inner">
+        <div class="song-popup-jacket"></div>
+        <div class="song-popup-info">
+          <div class="song-popup-title" id="song-popup-title"></div>
+          <div class="song-popup-artist" id="song-popup-artist"></div>
+          <div class="difficulty-buttons" id="song-popup-difficulty"></div>
+        </div>
+        <button id="song-popup-start-btn">곡 시작</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="options-overlay" hidden>
   <div class="options-panel" id="options-view">
     <h2>옵션</h2>
     <div class="option-row">
@@ -153,7 +171,8 @@ app.innerHTML = `
         ).join("")}
       </select>
     </div>
-    <button id="options-start-btn">시작</button>
+    <button type="button" id="options-close-btn">닫기</button>
+  </div>
   </div>
 
   <div id="gameplay-view" hidden>
@@ -207,7 +226,10 @@ app.innerHTML = `
       <span class="histogram-corner histogram-corner-slow">SLOW <span id="result-grade-slow">0</span></span>
       <div class="histogram" id="result-histogram"></div>
     </div>
-    <button id="restart-btn">다시하기</button>
+    <div class="results-buttons">
+      <button id="restart-btn">다시하기</button>
+      <button id="results-song-select-btn">선곡</button>
+    </div>
   </div>
 `;
 
@@ -217,7 +239,14 @@ const speedDisplay = document.querySelector<HTMLSpanElement>("#speed-display")!;
 const comboDisplay = document.querySelector<HTMLSpanElement>("#combo-display")!;
 const scoreDisplay = document.querySelector<HTMLSpanElement>("#score-display")!;
 const gradePanel = document.querySelector<HTMLDivElement>("#grade-panel")!;
-const optionsView = document.querySelector<HTMLDivElement>("#options-view")!;
+const songSelectView = document.querySelector<HTMLDivElement>("#song-select-view")!;
+const songListEl = document.querySelector<HTMLDivElement>("#song-list")!;
+const songPopup = document.querySelector<HTMLDivElement>("#song-popup")!;
+const songPopupTitle = document.querySelector<HTMLDivElement>("#song-popup-title")!;
+const songPopupArtist = document.querySelector<HTMLDivElement>("#song-popup-artist")!;
+const songPopupDifficultyEl = document.querySelector<HTMLDivElement>("#song-popup-difficulty")!;
+const songPopupStartBtn = document.querySelector<HTMLButtonElement>("#song-popup-start-btn")!;
+const optionsOverlay = document.querySelector<HTMLDivElement>("#options-overlay")!;
 const optionCanvasWidthSelect = document.querySelector<HTMLSelectElement>("#option-canvas-width")!;
 const optionSpeedInput = document.querySelector<HTMLInputElement>("#option-speed")!;
 const optionGreenNumberInput = document.querySelector<HTMLInputElement>("#option-green-number")!;
@@ -228,7 +257,7 @@ const optionJudgeLineInput = document.querySelector<HTMLInputElement>("#option-j
 const optionNoteSkinSelect = document.querySelector<HTMLSelectElement>("#option-note-skin")!;
 const presetButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".preset-btn"));
 const optionSavePresetBtn = document.querySelector<HTMLButtonElement>("#option-save-preset")!;
-const optionsStartBtn = document.querySelector<HTMLButtonElement>("#options-start-btn")!;
+const optionsCloseBtn = document.querySelector<HTMLButtonElement>("#options-close-btn")!;
 const canvas = document.querySelector<HTMLCanvasElement>("#game-canvas")!;
 const ctx = canvas.getContext("2d")!;
 const gameplayView = document.querySelector<HTMLDivElement>("#gameplay-view")!;
@@ -239,6 +268,7 @@ const resultsPanel = document.querySelector<HTMLDivElement>("#results-panel")!;
 const resultGradePanel = document.querySelector<HTMLDivElement>("#result-grade-panel")!;
 const resultHistogram = document.querySelector<HTMLDivElement>("#result-histogram")!;
 const restartBtn = document.querySelector<HTMLButtonElement>("#restart-btn")!;
+const resultsSongSelectBtn = document.querySelector<HTMLButtonElement>("#results-song-select-btn")!;
 
 gradePanel.innerHTML = gradePanelHtml("grade", true);
 resultGradePanel.innerHTML = gradePanelHtml("result-grade", false);
@@ -247,7 +277,8 @@ resultGradePanel.innerHTML = gradePanelHtml("result-grade", false);
 let canvasWidth = CANVAS_WIDTH_OPTIONS[DEFAULT_CANVAS_WIDTH_OPTION];
 const dpr = window.devicePixelRatio || 1;
 let layout = computeLaneLayout(canvasWidth, DEFAULT_SCRATCH_SIDE, JUDGE_LINE_MARGIN_BOTTOM);
-const chart = parseChart(dummyChartRaw);
+// 선곡 팝업에서 "곡 시작"을 누른 시점에 선택된 곡의 채보로 교체된다.
+let chart: Chart = parseChart(dummyChartRaw);
 // 실제 플레이에 쓰이는 채보. 원본 chart는 절대 변형하지 않고, 배치 옵션을 적용한
 // 새 노트 배열로 매 플레이 시작 시 다시 만든다(SPEC.md 6절).
 let activeChart: Chart = chart;
@@ -282,10 +313,17 @@ let naturalHeight = 0;
 
 const clock = new AudioClock();
 type Phase = "idle" | "playing" | "paused" | "resuming" | "results";
-// "idle"은 옵션 화면 단계. 클릭 시 캔버스에 Pointer Lock을 요청하는 안전망 등
-// "playing" 전용 동작이 옵션 화면에서 오작동하지 않도록 별도 상태로 분리했다.
+// "idle"은 게임 화면 밖(선곡/옵션) 단계. 클릭 시 캔버스에 Pointer Lock을 요청하는
+// 안전망 등 "playing" 전용 동작이 오작동하지 않도록 별도 상태로 분리했다.
 let phase: Phase = "idle";
 let baseFitScale = 1;
+
+// 최상위 화면 전환. 선곡 화면은 자체 고정 크기라 게임 화면의 화면맞춤(zoom)
+// 시스템과 무관하다 — applyZoom()이 이 값을 보고 분기한다.
+type Screen = "songSelect" | "gameplay";
+let screen: Screen = "songSelect";
+let selectedSongId: string | null = null;
+let selectedDifficulty: Difficulty = "normal";
 
 // exitPointerLock()을 우리가 직접(결과 화면 진입 등) 호출했을 때, 그 뒤에
 // "비동기로" 날아오는 pointerlockchange 이벤트를 진짜 잠금 해제(=일시정지
@@ -294,6 +332,11 @@ let baseFitScale = 1;
 let ignoreNextUnlock = false;
 
 function applyZoom(): void {
+  if (screen === "songSelect") {
+    // 선곡 화면은 자체 고정 크기라 게임 화면 화면맞춤 배율과 무관하게 항상 1배로 둔다.
+    app.style.setProperty("zoom", "1");
+    return;
+  }
   // 결과 화면은 콘텐츠가 적어 같은 배율이면 상대적으로 작아 보이므로 추가로 키운다.
   const zoom = phase === "results" ? baseFitScale * RESULTS_SCALE_BOOST : baseFitScale;
   // transform은 레이아웃 박스 크기를 바꾸지 않아 스크롤/중앙정렬이 어긋나므로
@@ -640,6 +683,9 @@ async function startPlay(): Promise<void> {
   scratchDirectionState = createScratchDirectionState();
   activeHolds = new Map();
   phase = "playing";
+  screen = "gameplay";
+  songSelectView.hidden = true;
+  optionsOverlay.hidden = true;
   gameplayView.hidden = false;
   resultsPanel.hidden = true;
   pausePanel.hidden = true;
@@ -735,10 +781,10 @@ optionSavePresetBtn.addEventListener("click", () => {
 applySnapshotToInputs(presetSlots[activePresetIndex] ?? createDefaultSnapshot());
 highlightActivePreset();
 
-optionsStartBtn.addEventListener("click", async () => {
-  optionsStartBtn.disabled = true;
-  optionsStartBtn.textContent = "실행 중";
-
+// 옵션 화면의 입력값들을 실제 런타임 상태(레이아웃/속도/오프셋/색상)에 반영한다.
+// 옵션 오버레이를 닫을 때 호출된다 — 페이지 로드 시 프리셋을 불러온 직후에도 한 번
+// 호출해야, 오버레이를 한 번도 열지 않아도 저장된 프리셋 값이 실제로 적용된다.
+function applyOptionsFromInputs(): void {
   const judgeLineMarginBottom = Math.min(
     JUDGE_LINE_MARGIN_MAX,
     Math.max(JUDGE_LINE_MARGIN_MIN, Number(optionJudgeLineInput.value) || JUDGE_LINE_MARGIN_BOTTOM),
@@ -752,18 +798,125 @@ optionsStartBtn.addEventListener("click", async () => {
   inputOffsetMs = Math.min(OFFSET_MAX_MS, Math.max(OFFSET_MIN_MS, Number(optionInputOffsetInput.value) || 0));
   activeNoteColors =
     NOTE_SKIN_PALETTES.find((palette) => palette.id === optionNoteSkinSelect.value) ?? NOTE_SKIN_PALETTES[0];
+}
 
-  optionsView.hidden = true;
-  gameplayView.hidden = false;
+function openOptionsOverlay(): void {
+  optionsOverlay.hidden = false;
+}
+
+function closeOptionsOverlay(): void {
+  applyOptionsFromInputs();
+  optionsOverlay.hidden = true;
+}
+
+optionsCloseBtn.addEventListener("click", closeOptionsOverlay);
+
+// 오버레이 바깥(어두운 배경)을 클릭해도 닫힌다.
+optionsOverlay.addEventListener("click", (event) => {
+  if (event.target === optionsOverlay) closeOptionsOverlay();
+});
+
+// 선곡 화면에서 스페이스바를 누르면 옵션이 뜨고, 다시 누르면 닫힌다(SPEC.md 6절).
+window.addEventListener("keydown", (event) => {
+  if (screen !== "songSelect") return;
+  if (event.key !== " ") return;
+  event.preventDefault();
+  if (optionsOverlay.hidden) openOptionsOverlay();
+  else closeOptionsOverlay();
+});
+
+// --- 선곡 화면 ---
+
+function findSong(id: string): SongEntry {
+  const song = SONG_LIST.find((s) => s.id === id);
+  if (song === undefined) throw new Error(`선곡 목록에 없는 곡 id: ${id}`);
+  return song;
+}
+
+function renderSongList(): void {
+  songListEl.innerHTML = SONG_LIST.map(
+    (song) => `
+      <button type="button" class="song-item" data-song-id="${song.id}">
+        <div class="song-item-jacket"></div>
+        <div class="song-item-meta">
+          <div class="song-item-title">${song.title}</div>
+          <div class="song-item-artist">${song.artist}</div>
+        </div>
+        <div class="song-item-levels">
+          ${DIFFICULTIES.map((d) => `<span class="level-badge level-${d}">${DIFFICULTY_LABEL[d]} ${song.levels[d]}</span>`).join("")}
+        </div>
+      </button>`,
+  ).join("");
+}
+
+function renderPopupDifficultyButtons(song: SongEntry): void {
+  songPopupDifficultyEl.innerHTML = DIFFICULTIES.map(
+    (d) =>
+      `<button type="button" class="difficulty-btn diff-${d}${d === selectedDifficulty ? " active" : ""}" data-difficulty="${d}">${DIFFICULTY_LABEL[d]} ${song.levels[d]}</button>`,
+  ).join("");
+}
+
+function openSongPopup(songId: string): void {
+  selectedSongId = songId;
+  const song = findSong(songId);
+  songPopupTitle.textContent = song.title;
+  songPopupArtist.textContent = song.artist;
+  renderPopupDifficultyButtons(song);
+  songPopup.classList.add("open");
+}
+
+songListEl.addEventListener("click", (event) => {
+  const target = event.target as HTMLElement;
+  const btn = target.closest<HTMLButtonElement>(".song-item");
+  if (btn === null) return;
+  openSongPopup(btn.dataset.songId!);
+});
+
+songPopupDifficultyEl.addEventListener("click", (event) => {
+  const target = event.target as HTMLElement;
+  const btn = target.closest<HTMLButtonElement>(".difficulty-btn");
+  if (btn === null || selectedSongId === null) return;
+  selectedDifficulty = btn.dataset.difficulty as Difficulty;
+  renderPopupDifficultyButtons(findSong(selectedSongId));
+});
+
+// "곡 시작": 선택된 곡의 채보로 교체하고 게임 화면으로 넘어간다. 난이도는 지금은
+// 표시/선택만 되고 실제로 다른 채보를 불러오지는 않는다(테스트용 채보 하나뿐 — songList.ts 참고).
+songPopupStartBtn.addEventListener("click", async () => {
+  if (selectedSongId === null) return;
+  songPopupStartBtn.disabled = true;
+  songPopupStartBtn.textContent = "실행 중";
+
+  chart = parseChart(findSong(selectedSongId).chartRaw);
 
   // 게임 화면이 실제로 보이는 지금(zoom=1) 자연 크기를 측정해야 fitToViewport가 정확하다.
+  screen = "gameplay";
+  songSelectView.hidden = true;
+  gameplayView.hidden = false;
   naturalWidth = app.scrollWidth;
   naturalHeight = app.scrollHeight;
   fitToViewport();
 
   await startPlay();
+
+  songPopupStartBtn.disabled = false;
+  songPopupStartBtn.textContent = "곡 시작";
 });
+
+function goToSongSelect(): void {
+  screen = "songSelect";
+  phase = "idle";
+  resultsPanel.hidden = true;
+  gameplayView.hidden = true;
+  songSelectView.hidden = false;
+  applyZoom();
+}
+
+resultsSongSelectBtn.addEventListener("click", goToSongSelect);
 
 restartBtn.addEventListener("click", async () => {
   await startPlay();
 });
+
+renderSongList();
+applyOptionsFromInputs(); // 페이지 로드 시 불러온 프리셋 값을 런타임 상태에도 반영
