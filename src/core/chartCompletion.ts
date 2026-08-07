@@ -2,8 +2,8 @@ import type { Chart } from "../chart/types";
 import { JUDGEABLE_LANES } from "../config";
 
 // 판정 대상 레인(JUDGEABLE_LANES)의 노트가 전부 결판난 뒤(마지막 노트 시각 +
-// 자동 MISS 윈도우)를 곡 완료로 본다. FX/스크래치처럼 아직 판정이 붙지 않은
-// 레인은 영원히 pending이라 "모두 judged됐는지"로는 판단할 수 없다.
+// 자동 MISS 윈도우)를 곡 완료로 본다. 아직 판정이 안 붙은 레인이 있다면 그 레인
+// 노트는 영원히 pending이라 "모두 judged됐는지"로는 판단할 수 없어 시각 기준을 쓴다.
 export function isChartComplete(
   chart: Chart,
   currentTimeMs: number,

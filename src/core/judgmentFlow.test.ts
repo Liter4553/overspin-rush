@@ -13,7 +13,7 @@ import {
   INPUT_OFFSET_MS,
   JUDGEABLE_LANES,
 } from "../config";
-import type { Chart } from "../chart/types";
+import type { Chart, NoteLane } from "../chart/types";
 
 function makeChart(notes: Chart["notes"]): Chart {
   return {
@@ -32,7 +32,7 @@ function makeChart(notes: Chart["notes"]): Chart {
 function simulateKeyHit(
   tracker: ReturnType<typeof createNoteTracker>,
   gameState: ReturnType<typeof createGameState>,
-  lane: 0 | 1 | 2,
+  lane: NoteLane,
   inputTimeMs: number,
 ) {
   const found = findNearestPendingNote(tracker, lane, inputTimeMs, AUTO_MISS_WINDOW_MS);
@@ -122,7 +122,7 @@ describe("판정 흐름 통합 (judge + noteState + gameState)", () => {
     expect(state.gradeCounts.MISS).toBe(1);
   });
 
-  it("main.ts와 동일하게 JUDGEABLE_LANES로 필터링하면 FX는 자동 MISS 대상에서 제외된다 (회귀 테스트)", () => {
+  it("main.ts와 동일하게 JUDGEABLE_LANES로 필터링하면 이제 FX도 자동 MISS 대상에 포함된다 (마일스톤 7 회귀 테스트)", () => {
     const chart = makeChart([
       { time: 1000, lane: 0, type: "tap" },
       { time: 1000, lane: "fx", type: "tap" },
@@ -134,10 +134,29 @@ describe("판정 흐름 통합 (judge + noteState + gameState)", () => {
     const judgeableTracked = tracker.filter((t) => JUDGEABLE_LANES.includes(t.note.lane));
     const missed = applyAutoMiss(judgeableTracked, 1081, AUTO_MISS_WINDOW_MS);
 
-    expect(missed).toHaveLength(2); // 노트 레인 0 + 스크래치, FX는 제외
+    expect(missed).toHaveLength(3); // 노트 레인 0 + FX + 스크래치 전부 판정 대상
     const fxEntry = tracker.find((t) => t.note.lane === "fx")!;
-    const scratchEntry = tracker.find((t) => t.note.lane === "scratch")!;
-    expect(fxEntry.state).toBe("pending"); // FX는 아직 판정 시스템이 안 붙었으니 pending 유지
-    expect(scratchEntry.state).toBe("judged"); // 스크래치는 이제 판정 대상
+    expect(fxEntry.state).toBe("judged");
+    expect(fxEntry.grade).toBe("MISS");
+  });
+
+  it("FX와 일반 노트가 같은 시각에 있어도 서로 독립적으로 판정된다 (SPEC.md 2절, 9절)", () => {
+    const chart = makeChart([
+      { time: 1000, lane: 0, type: "tap" },
+      { time: 1000, lane: "fx", type: "tap" },
+    ]);
+    const tracker = createNoteTracker(chart);
+    let state = createGameState();
+
+    // 일반 노트는 정타로, FX는 40ms 느리게(PERFECT) 입력해도 서로 간섭하지 않는다.
+    const laneResult = simulateKeyHit(tracker, state, 0, 1000);
+    state = laneResult.gameState;
+    const fxResult = simulateKeyHit(tracker, state, "fx", 1040);
+    state = fxResult.gameState;
+
+    expect(laneResult.grade).toBe("PERFECT_PLUS");
+    expect(fxResult.grade).toBe("PERFECT");
+    expect(state.combo).toBe(2); // 둘 다 채점되어 콤보가 2까지 오른다
+    expect(state.score).toBe(4 + 3);
   });
 });

@@ -16,4 +16,8 @@ describe("resolveLaneFromKey", () => {
   it("매핑되지 않은 키는 null을 반환한다", () => {
     expect(resolveLaneFromKey("q", DEFAULT_KEYMAP)).toBeNull();
   });
+
+  it("Space를 FX 레인으로 매핑한다", () => {
+    expect(resolveLaneFromKey(" ", DEFAULT_KEYMAP)).toBe("fx");
+  });
 });

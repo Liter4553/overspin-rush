@@ -455,7 +455,6 @@ function renderLoop(): void {
 
   const currentTimeMs = clock.currentTime * 1000;
 
-  // 아직 판정이 붙지 않은 레인(FX)은 자동 MISS 대상에서 제외한다.
   const judgeableTracked = noteTracker.filter((t) => JUDGEABLE_LANES.includes(t.note.lane));
   const newlyMissed = applyAutoMiss(judgeableTracked, currentTimeMs, AUTO_MISS_WINDOW_MS);
   if (newlyMissed.length > 0) {

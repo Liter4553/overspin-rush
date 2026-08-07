@@ -23,5 +23,8 @@ export const dummyChartRaw = {
     { time: 5600, lane: 2, type: "tap" },
     { time: 6000, lane: "scratch", type: "tap" },
     { time: 6400, lane: "fx", type: "tap" },
+    // FX가 일반 노트에 가려지지 않는지 시각 확인용 — 같은 시각에 겹쳐서 떨어진다(SPEC.md 6절 마일스톤 7).
+    { time: 6800, lane: 1, type: "tap" },
+    { time: 6800, lane: "fx", type: "tap" },
   ],
 };

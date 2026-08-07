@@ -74,10 +74,11 @@ export const INPUT_OFFSET_MS = 0;
 
 // --- 키 입력 ---
 // 마일스톤 8 리매핑 UI가 이 맵만 교체하면 되도록 분리.
-export const DEFAULT_KEYMAP: Readonly<Record<string, 0 | 1 | 2>> = {
+export const DEFAULT_KEYMAP: Readonly<Record<string, 0 | 1 | 2 | "fx">> = {
   a: 0,
   s: 1,
   d: 2,
+  " ": "fx",
 };
 
 // --- 판정바 ---
@@ -102,9 +103,8 @@ export const DEFAULT_HOLD_TICK_INTERVAL_BEATS = 1;
 export const JUDGE_TEXT_DISPLAY_MS = 500;
 
 // --- 결과 화면 (SPEC.md 5절) ---
-// 지금 실제로 판정되는 레인. 마일스톤 7(FX)에서 판정이 붙으면
-// 여기에 추가하기만 하면 이론치/완료 판정이 자동으로 확장된다.
-export const JUDGEABLE_LANES: readonly NoteLane[] = [0, 1, 2, "scratch"];
+// 판정이 붙는 레인. 마일스톤 7에서 FX가 추가되어 이제 모든 레인이 판정 대상이다.
+export const JUDGEABLE_LANES: readonly NoteLane[] = [0, 1, 2, "fx", "scratch"];
 
 // 오차 분포 히스토그램 버킷 폭(ms). JUDGMENT_BAR_RANGE_MS(80)를 이 값으로 나눠
 // 좌우 대칭 버킷 개수를 만든다.
