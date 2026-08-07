@@ -11,6 +11,7 @@ import { applyAutoMiss, createNoteTracker, findNearestPendingNote, markJudged } 
 import { applyHoldTick, applyJudgement, createGameState } from "./core/gameState";
 import { computeErrorMs, displaySign, judge } from "./core/judge";
 import { advanceHoldTicks, computeTickIntervalMs, startActiveHold, type ActiveHold } from "./core/holdState";
+import { clampSpeed, greenNumberMsToSpeed, speedToGreenNumberMs } from "./core/speedOptions";
 import { resolveLaneFromKey } from "./input/keyboard";
 import {
   accumulateMovement,
@@ -27,10 +28,13 @@ import {
   AUTO_MISS_WINDOW_MS,
   BASE_GREEN_NUMBER_MS,
   CANVAS_HEIGHT,
+  type CanvasWidthOption,
   CANVAS_WIDTH_OPTIONS,
   DEFAULT_CANVAS_WIDTH_OPTION,
   DEFAULT_KEYMAP,
   DEFAULT_SCRATCH_SIDE,
+  GREEN_NUMBER_MAX_MS,
+  GREEN_NUMBER_MIN_MS,
   INPUT_OFFSET_MS,
   JUDGEABLE_LANES,
   NOTE_JUDGMENT_TABLE,
@@ -40,6 +44,11 @@ import {
   SCRATCH_DIR_RESET_MS,
   SCRATCH_JUDGMENT_TABLE,
   SCRATCH_THRESHOLD,
+  SPEED_DECREASE_KEY,
+  SPEED_INCREASE_KEY,
+  SPEED_MAX,
+  SPEED_MIN,
+  SPEED_STEP,
   VIEWPORT_FIT_MARGIN_PX,
   VIEWPORT_FIT_MAX_SCALE,
   VIEWPORT_FIT_MIN_SCALE,
@@ -71,7 +80,28 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
   <h1>Overspin RUSH</h1>
 
-  <div id="gameplay-view">
+  <div class="options-panel" id="options-view">
+    <h2>옵션</h2>
+    <div class="option-row">
+      <label for="option-canvas-width">캔버스 폭</label>
+      <select id="option-canvas-width">
+        <option value="narrow">좁게</option>
+        <option value="normal" selected>보통</option>
+        <option value="wide">넓게</option>
+      </select>
+    </div>
+    <div class="option-row">
+      <label for="option-speed">배속</label>
+      <input type="number" id="option-speed" min="${SPEED_MIN}" max="${SPEED_MAX}" step="${SPEED_STEP}" value="1" />
+    </div>
+    <div class="option-row">
+      <label for="option-green-number">그린넘버(ms)</label>
+      <input type="number" id="option-green-number" min="${GREEN_NUMBER_MIN_MS}" max="${GREEN_NUMBER_MAX_MS}" value="${BASE_GREEN_NUMBER_MS}" />
+    </div>
+    <button id="options-start-btn">시작</button>
+  </div>
+
+  <div id="gameplay-view" hidden>
     <div class="clock-panel">
       <div class="stat">
         <span class="stat-label">TIME</span>
@@ -80,6 +110,10 @@ app.innerHTML = `
       <div class="stat">
         <span class="stat-label">BPM</span>
         <span class="stat-value" id="bpm-display">--</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">SPEED</span>
+        <span class="stat-value" id="speed-display">1.00x</span>
       </div>
       <div class="stat">
         <span class="stat-label">COMBO</span>
@@ -101,7 +135,6 @@ app.innerHTML = `
       </div>
     </div>
     <div class="grade-panel" id="grade-panel"></div>
-    <button id="start-btn">시작</button>
   </div>
 
   <div class="results-panel" id="results-panel" hidden>
@@ -125,10 +158,15 @@ app.innerHTML = `
 
 const timeDisplay = document.querySelector<HTMLSpanElement>("#time-display")!;
 const bpmDisplay = document.querySelector<HTMLSpanElement>("#bpm-display")!;
+const speedDisplay = document.querySelector<HTMLSpanElement>("#speed-display")!;
 const comboDisplay = document.querySelector<HTMLSpanElement>("#combo-display")!;
 const scoreDisplay = document.querySelector<HTMLSpanElement>("#score-display")!;
 const gradePanel = document.querySelector<HTMLDivElement>("#grade-panel")!;
-const startBtn = document.querySelector<HTMLButtonElement>("#start-btn")!;
+const optionsView = document.querySelector<HTMLDivElement>("#options-view")!;
+const optionCanvasWidthSelect = document.querySelector<HTMLSelectElement>("#option-canvas-width")!;
+const optionSpeedInput = document.querySelector<HTMLInputElement>("#option-speed")!;
+const optionGreenNumberInput = document.querySelector<HTMLInputElement>("#option-green-number")!;
+const optionsStartBtn = document.querySelector<HTMLButtonElement>("#options-start-btn")!;
 const canvas = document.querySelector<HTMLCanvasElement>("#game-canvas")!;
 const ctx = canvas.getContext("2d")!;
 const gameplayView = document.querySelector<HTMLDivElement>("#gameplay-view")!;
@@ -143,13 +181,19 @@ const restartBtn = document.querySelector<HTMLButtonElement>("#restart-btn")!;
 gradePanel.innerHTML = gradePanelHtml("grade", true);
 resultGradePanel.innerHTML = gradePanelHtml("result-grade", false);
 
-const canvasWidth = CANVAS_WIDTH_OPTIONS[DEFAULT_CANVAS_WIDTH_OPTION];
+// 캔버스 폭은 옵션 화면에서 "시작"을 누르는 시점에 확정된다(applySelectedLayout).
+let canvasWidth = CANVAS_WIDTH_OPTIONS[DEFAULT_CANVAS_WIDTH_OPTION];
 const dpr = window.devicePixelRatio || 1;
-canvas.style.width = `${canvasWidth}px`;
-canvas.style.height = `${CANVAS_HEIGHT}px`;
-
-const layout = computeLaneLayout(canvasWidth, DEFAULT_SCRATCH_SIDE);
+let layout = computeLaneLayout(canvasWidth, DEFAULT_SCRATCH_SIDE);
 const chart = parseChart(dummyChartRaw);
+
+// 선택된 캔버스 폭을 실제 스타일/레이아웃에 반영한다. 옵션 화면 "시작" 클릭 시 호출.
+function applySelectedLayout(canvasWidthOption: CanvasWidthOption): void {
+  canvasWidth = CANVAS_WIDTH_OPTIONS[canvasWidthOption];
+  canvas.style.width = `${canvasWidth}px`;
+  canvas.style.height = `${CANVAS_HEIGHT}px`;
+  layout = computeLaneLayout(canvasWidth, DEFAULT_SCRATCH_SIDE);
+}
 
 // 캔버스 비트맵 해상도를 dpr과 화면 맞춤 배율(uiScale) 둘 다 반영해서 설정한다.
 // 그래야 #app을 zoom으로 확대해도 캔버스가 흐려지지 않는다.
@@ -160,14 +204,18 @@ function setCanvasResolution(uiScale: number): void {
   ctx.setTransform(effectiveScale, 0, 0, effectiveScale, 0, 0);
 }
 
-// 확대 전(zoom=1) 상태에서 자연 크기를 한 번만 측정해둔다. 결과 화면도 이 크기를
-// 기준으로 배율을 계산하므로, 결과 화면이 아닌 게임 화면(더 큰 쪽) 기준으로 잰다.
-const naturalWidth = app.scrollWidth;
-const naturalHeight = app.scrollHeight;
+// 확대 전(zoom=1) 상태에서 게임 화면의 자연 크기를 측정해둔다(결과 화면도 이 크기를
+// 기준으로 배율을 계산하므로, 결과 화면이 아닌 게임 화면(더 큰 쪽) 기준으로 잰다).
+// 캔버스 폭이 옵션에서 정해지므로, 옵션 "시작" 클릭 직후(게임 화면이 보이는 시점)에만
+// 측정 가능하다 — 그 전에는 0으로 두고 fitToViewport가 아무것도 하지 않게 막는다.
+let naturalWidth = 0;
+let naturalHeight = 0;
 
 const clock = new AudioClock();
-type Phase = "playing" | "paused" | "resuming" | "results";
-let phase: Phase = "playing";
+type Phase = "idle" | "playing" | "paused" | "resuming" | "results";
+// "idle"은 옵션 화면 단계. 클릭 시 캔버스에 Pointer Lock을 요청하는 안전망 등
+// "playing" 전용 동작이 옵션 화면에서 오작동하지 않도록 별도 상태로 분리했다.
+let phase: Phase = "idle";
 let baseFitScale = 1;
 
 // exitPointerLock()을 우리가 직접(결과 화면 진입 등) 호출했을 때, 그 뒤에
@@ -186,6 +234,7 @@ function applyZoom(): void {
 }
 
 function fitToViewport(): void {
+  if (naturalWidth === 0) return; // 게임 화면이 아직 한 번도 표시되지 않았다(옵션 화면 단계)
   const availableWidth = window.innerWidth - VIEWPORT_FIT_MARGIN_PX;
   const availableHeight = window.innerHeight - VIEWPORT_FIT_MARGIN_PX;
   baseFitScale = computeFitScale(
@@ -199,7 +248,6 @@ function fitToViewport(): void {
   applyZoom();
 }
 
-fitToViewport();
 window.addEventListener("resize", fitToViewport);
 
 let noteTracker = createNoteTracker(chart);
@@ -211,6 +259,13 @@ let scratchDirectionState = createScratchDirectionState();
 // 레인당 활성 홀드는 최대 1개. keyup 시 즉시 삭제되므로("재개되지 않음") 맵에
 // 남아 있다는 것 자체가 "지금 눌려서 틱이 발생 중"이라는 뜻이다.
 let activeHolds = new Map<NoteLane, ActiveHold>();
+// 진짜 상태는 이 값 하나뿐(SPEC.md 6절) — 배속은 이 값을 표시/조작하는 입력 경로일 뿐이다.
+let effectiveGreenNumberMs = BASE_GREEN_NUMBER_MS;
+
+function updateSpeedDisplay(): void {
+  const speed = greenNumberMsToSpeed(effectiveGreenNumberMs, BASE_GREEN_NUMBER_MS);
+  speedDisplay.textContent = `${speed.toFixed(2)}x`;
+}
 
 function formatTime(seconds: number): string {
   const clamped = Math.max(0, seconds);
@@ -392,6 +447,15 @@ function handleKeydown(event: KeyboardEvent): void {
   if (event.repeat) return;
   if (!clock.isRunning) return;
 
+  if (event.key === SPEED_DECREASE_KEY || event.key === SPEED_INCREASE_KEY) {
+    const direction = event.key === SPEED_DECREASE_KEY ? -1 : 1;
+    const currentSpeed = greenNumberMsToSpeed(effectiveGreenNumberMs, BASE_GREEN_NUMBER_MS);
+    const nextSpeed = clampSpeed(currentSpeed + direction * SPEED_STEP);
+    effectiveGreenNumberMs = speedToGreenNumberMs(nextSpeed, BASE_GREEN_NUMBER_MS);
+    updateSpeedDisplay();
+    return;
+  }
+
   const lane = resolveLaneFromKey(event.key, DEFAULT_KEYMAP);
   if (lane === null) return;
 
@@ -478,8 +542,8 @@ function renderLoop(): void {
 
   ctx.clearRect(0, 0, canvasWidth, CANVAS_HEIGHT);
   drawLaneBackground(ctx, layout);
-  drawFxNotes(ctx, layout, pendingNotes, currentTimeMs, BASE_GREEN_NUMBER_MS);
-  drawNotes(ctx, layout, pendingNotes, currentTimeMs, BASE_GREEN_NUMBER_MS);
+  drawFxNotes(ctx, layout, pendingNotes, currentTimeMs, effectiveGreenNumberMs);
+  drawNotes(ctx, layout, pendingNotes, currentTimeMs, effectiveGreenNumberMs);
   drawJudgeLine(ctx, layout);
   drawJudgmentBar(ctx, layout, judgmentTicks, currentTimeMs);
   drawJudgmentText(ctx, layout, latestJudgment, currentTimeMs);
@@ -515,9 +579,41 @@ async function startPlay(): Promise<void> {
   renderLoop();
 }
 
-startBtn.addEventListener("click", async () => {
-  startBtn.disabled = true;
-  startBtn.textContent = "실행 중";
+// 배속 입력이 바뀌면 그린넘버 입력을(그 반대도) 서로 동기화한다 — SPEC.md 6절,
+// effectiveGreenNumberMs 하나가 진짜 상태고 나머지는 그걸 보여주는 두 입력 경로.
+function syncSpeedFromInput(): void {
+  const speed = clampSpeed(Number(optionSpeedInput.value) || SPEED_MIN);
+  optionSpeedInput.value = String(speed);
+  optionGreenNumberInput.value = String(Math.round(speedToGreenNumberMs(speed, BASE_GREEN_NUMBER_MS)));
+}
+
+function syncGreenNumberFromInput(): void {
+  const raw = Number(optionGreenNumberInput.value) || BASE_GREEN_NUMBER_MS;
+  const greenNumber = Math.min(GREEN_NUMBER_MAX_MS, Math.max(GREEN_NUMBER_MIN_MS, raw));
+  optionGreenNumberInput.value = String(Math.round(greenNumber));
+  optionSpeedInput.value = String(clampSpeed(greenNumberMsToSpeed(greenNumber, BASE_GREEN_NUMBER_MS)));
+}
+
+optionSpeedInput.addEventListener("change", syncSpeedFromInput);
+optionGreenNumberInput.addEventListener("change", syncGreenNumberFromInput);
+
+optionsStartBtn.addEventListener("click", async () => {
+  optionsStartBtn.disabled = true;
+  optionsStartBtn.textContent = "실행 중";
+
+  applySelectedLayout(optionCanvasWidthSelect.value as CanvasWidthOption);
+  syncSpeedFromInput(); // 입력값을 정규화(clamp/반올림)해서 그린넘버 입력과 최종 일치시킨다.
+  effectiveGreenNumberMs = Number(optionGreenNumberInput.value);
+  updateSpeedDisplay();
+
+  optionsView.hidden = true;
+  gameplayView.hidden = false;
+
+  // 게임 화면이 실제로 보이는 지금(zoom=1) 자연 크기를 측정해야 fitToViewport가 정확하다.
+  naturalWidth = app.scrollWidth;
+  naturalHeight = app.scrollHeight;
+  fitToViewport();
+
   await startPlay();
 });
 

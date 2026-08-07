@@ -30,8 +30,19 @@ export const DEFAULT_SCRATCH_SIDE: ScratchSide = "right";
 export const JUDGE_LINE_MARGIN_BOTTOM = 120;
 
 // --- 스크롤(그린넘버) ---
-// 배속 1.0x 기준 그린넘버(ms). 배속/그린넘버 변환은 마일스톤 8에서 연결한다.
+// 배속 1.0x 기준 그린넘버(ms).
 export const BASE_GREEN_NUMBER_MS = 800;
+
+// --- 속도 옵션 (SPEC.md 6절) ---
+export const SPEED_MIN = 0.5;
+export const SPEED_MAX = 10.0;
+export const SPEED_STEP = 0.25;
+export const GREEN_NUMBER_MIN_MS = BASE_GREEN_NUMBER_MS / SPEED_MAX;
+export const GREEN_NUMBER_MAX_MS = BASE_GREEN_NUMBER_MS / SPEED_MIN;
+// 플레이 중 실시간 속도 변경 단축키(텐키 아닌 숫자키 행). 브라우저 기본 단축키와
+// 겹치는 펑션키(F3/F4 등) 대신 선택.
+export const SPEED_DECREASE_KEY = "1";
+export const SPEED_INCREASE_KEY = "2";
 
 // --- 노트 렌더링 ---
 export const NOTE_HEIGHT = 26;
