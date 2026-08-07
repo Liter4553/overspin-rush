@@ -307,16 +307,19 @@ async function resumeGame(): Promise<void> {
   if (phase !== "paused") return;
   phase = "resuming";
 
-  // Pointer Lock 재요청은 클릭이라는 사용자 제스처 컨텍스트를 유지하기 위해
-  // 카운트다운(setTimeout) 이전, 즉 첫 await 이전에 호출한다.
-  canvas.requestPointerLock();
-
   resumeBtn.hidden = true;
   pauseCountdown.hidden = false;
   for (let seconds = RESUME_COUNTDOWN_SECONDS; seconds > 0; seconds--) {
     pauseCountdown.textContent = String(seconds);
     await delay(1000);
   }
+
+  // Pointer Lock 재요청은 카운트다운이 끝난 뒤에 한다. Esc로 막 풀린 직후라면
+  // 브라우저가 재잠금을 짧게 쿨다운시키는데, 클릭 직후 바로 요청하면 그
+  // 쿨다운에 걸려 조용히 실패하는 경우가 있었다(성공/실패가 번갈아 나타남).
+  // 카운트다운 몇 초가 쿨다운보다 길고, "재개" 클릭에서 비롯된 사용자 제스처
+  // 유효기간(수 초) 안에는 들어오므로 여기서 요청하는 게 더 안정적이다.
+  canvas.requestPointerLock();
 
   phase = "playing";
   pausePanel.hidden = true;
