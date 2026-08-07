@@ -4,6 +4,10 @@
 }
 
 body {
+  /* min-height:100vh와 padding을 같이 쓰면 기본 content-box 특성상 padding이
+     100vh 위에 얹혀서 뷰포트보다 항상 패딩만큼 넘쳐 스크롤이 생겼다.
+     border-box로 바꿔 패딩을 100vh 안에 포함시킨다. */
+  box-sizing: border-box;
   margin: 0;
   min-height: 100vh;
   display: flex;
@@ -33,6 +37,7 @@ body {
 }
 
 h1 {
+  margin: 0;
   font-size: 1.4rem;
   letter-spacing: 0.1em;
   color: #7dd3fc;
@@ -172,11 +177,16 @@ h1 {
   display: none;
 }
 
-/* --- 선곡 화면 --- */
+/* --- 선곡 화면 ---
+   PC 게임인데도 세로로 긴 게임플레이 캔버스(480x800) 비율을 그대로 물려받아서
+   선곡창까지 세로로 너무 길어지고, 뷰포트보다 커서 페이지 전체가 위아래로
+   스크롤되는 문제가 있었다. 최소 1:1(정사각형) 이상의 가로형으로 바꾸고,
+   뷰포트보다 커지지 않도록 vw/vh로 상한을 둬서 페이지 스크롤이 아예 생기지
+   않게 한다 — 곡이 많아서 넘치는 부분은 .song-list 내부 스크롤만 움직인다. */
 #song-select-view {
   position: relative;
-  width: 480px;
-  height: 800px;
+  width: min(720px, 94vw);
+  height: min(600px, 78vh);
   overflow: hidden;
   display: flex;
   flex-direction: column;
