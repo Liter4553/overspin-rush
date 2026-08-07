@@ -169,6 +169,12 @@ type Phase = "playing" | "paused" | "resuming" | "results";
 let phase: Phase = "playing";
 let baseFitScale = 1;
 
+// exitPointerLock()을 우리가 직접(결과 화면 진입 등) 호출했을 때, 그 뒤에
+// "비동기로" 날아오는 pointerlockchange 이벤트를 진짜 잠금 해제(=일시정지
+// 트리거)로 오인하지 않게 막는 플래그. 이벤트가 재시작 이후처럼 늦게
+// 도착해도(phase가 이미 "playing"으로 바뀐 뒤라도) 정확히 1번만 무시한다.
+let ignoreNextUnlock = false;
+
 function applyZoom(): void {
   // 결과 화면은 콘텐츠가 적어 같은 배율이면 상대적으로 작아 보이므로 추가로 키운다.
   const zoom = phase === "results" ? baseFitScale * RESULTS_SCALE_BOOST : baseFitScale;
@@ -252,7 +258,9 @@ function showResults(): void {
 
   // Pointer Lock을 걸어둔 채 결과 화면으로 넘어가면 마우스 커서가 안 보이는
   // 치명적인 문제가 있었다 — 결과 화면에서는 항상 잠금을 풀어준다.
+  // 이 해제로 인한 pointerlockchange는 일시정지 트리거가 아니므로 무시 표시.
   if (document.pointerLockElement === canvas) {
+    ignoreNextUnlock = true;
     document.exitPointerLock();
   }
 }
@@ -320,11 +328,28 @@ resumeBtn.addEventListener("click", () => {
   void resumeGame();
 });
 
+// pointerlockchange는 "지금 안 잠겨있다"는 상태 스냅샷일 뿐 방향을 안 알려준다.
+// requestPointerLock()이 아직 실패/대기 중이라 애초에 한 번도 안 잠긴 경우까지
+// "해제됨"으로 오인해서 시작하자마자 일시정지되는 버그가 있었다. 그래서 실제로
+// 잠겨 있다가(true) 풀린(false) 전이일 때만 일시정지 트리거로 취급한다.
+let wasPointerLocked = false;
+
 // ESC 또는 Pointer Lock 해제(Esc로 풀리는 경우 포함) 시 항상 같은 일시정지로 처리한다.
+// 단, 결과 화면 진입 시 우리가 직접 잠금을 푼 경우(ignoreNextUnlock)는 제외 —
+// 그 이벤트가 재시작 이후로 늦게 도착해서 새 세션을 오인 일시정지시키는
+// 버그가 있었다.
 document.addEventListener("pointerlockchange", () => {
-  if (document.pointerLockElement !== canvas) {
-    void pauseGame();
+  const isLocked = document.pointerLockElement === canvas;
+  const wasLostJustNow = wasPointerLocked && !isLocked;
+  wasPointerLocked = isLocked;
+
+  if (!wasLostJustNow) return;
+
+  if (ignoreNextUnlock) {
+    ignoreNextUnlock = false;
+    return;
   }
+  void pauseGame();
 });
 
 // 브라우저가 Esc 해제 직후 재잠금 요청을 짧게 쿨다운시키는 경우가 있어
