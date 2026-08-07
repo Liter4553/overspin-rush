@@ -110,6 +110,40 @@ h1 {
   font-family: "Consolas", monospace;
 }
 
+.preset-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.preset-btn {
+  padding: 6px 14px;
+  border: 1px solid #2a2c38;
+  border-radius: 4px;
+  background: #12161f;
+  color: #e8eaf0;
+  font-family: "Consolas", monospace;
+  cursor: pointer;
+}
+
+.preset-btn.active {
+  border-color: #7dd3fc;
+  color: #7dd3fc;
+}
+
+#option-save-preset {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #2a2c38;
+  border-radius: 4px;
+  background: #12161f;
+  color: #e8eaf0;
+  cursor: pointer;
+}
+
+#option-save-preset:hover {
+  background: #7dd3fc22;
+}
+
 #options-start-btn {
   padding: 12px 32px;
   font-size: 1rem;

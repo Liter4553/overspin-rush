@@ -160,6 +160,12 @@ export const SCRATCH_THRESHOLD = 20;
 // 마지막 유효 스크래치로부터 이 시간(ms)이 지나면 방향 제한이 풀린다.
 export const SCRATCH_DIR_RESET_MS = 2000;
 
+// --- 옵션 프리셋 저장/복원 (SPEC.md 6절) ---
+// 자동 저장 하나가 아니라, 사용자가 원하는 슬롯에 명시적으로 저장/전환하는 프리셋 3개.
+export const PRESET_COUNT = 3;
+export const PRESET_STORAGE_KEY = "overspin-rush:presets";
+export const ACTIVE_PRESET_STORAGE_KEY = "overspin-rush:activePreset";
+
 // --- 일시정지 ---
 // ESC 또는 Pointer Lock 해제 시 일시정지(SPEC.md 9절 폴리싱의 일시정지를
 // Pointer Lock 요구사항 때문에 최소 기능으로 앞당겨 구현).

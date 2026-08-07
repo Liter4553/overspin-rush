@@ -13,6 +13,15 @@ import { computeErrorMs, displaySign, judge } from "./core/judge";
 import { advanceHoldTicks, computeTickIntervalMs, startActiveHold, type ActiveHold } from "./core/holdState";
 import { clampSpeed, greenNumberMsToSpeed, speedToGreenNumberMs } from "./core/speedOptions";
 import { applyArrangement, type Arrangement } from "./core/laneArrangement";
+import {
+  clampPresetIndex,
+  createDefaultSnapshot,
+  parseActivePresetIndex,
+  parsePresets,
+  serializePresets,
+  type OptionsSnapshot,
+  type PresetSlots,
+} from "./core/optionsStorage";
 import { resolveLaneFromKey } from "./input/keyboard";
 import {
   accumulateMovement,
@@ -25,6 +34,7 @@ import { computeResults } from "./core/results";
 import { computeFitScale } from "./render/viewportScale";
 import type { Chart, NoteLane } from "./chart/types";
 import {
+  ACTIVE_PRESET_STORAGE_KEY,
   AUDIO_OFFSET_MS,
   AUTO_MISS_WINDOW_MS,
   BASE_GREEN_NUMBER_MS,
@@ -47,6 +57,8 @@ import {
   OFFSET_MAX_MS,
   OFFSET_MIN_MS,
   PAUSE_TRIGGER_KEY,
+  PRESET_COUNT,
+  PRESET_STORAGE_KEY,
   RESULTS_SCALE_BOOST,
   RESUME_COUNTDOWN_SECONDS,
   SCRATCH_DIR_RESET_MS,
@@ -90,6 +102,16 @@ app.innerHTML = `
 
   <div class="options-panel" id="options-view">
     <h2>옵션</h2>
+    <div class="option-row">
+      <label>프리셋</label>
+      <div class="preset-buttons" id="preset-buttons">
+        ${Array.from({ length: PRESET_COUNT }, (_, i) => `<button type="button" class="preset-btn" data-preset-index="${i}">${i + 1}</button>`).join("")}
+      </div>
+    </div>
+    <div class="option-row">
+      <label>&nbsp;</label>
+      <button type="button" id="option-save-preset">이 프리셋에 저장</button>
+    </div>
     <div class="option-row">
       <label for="option-canvas-width">캔버스 폭</label>
       <select id="option-canvas-width">
@@ -204,6 +226,8 @@ const optionAudioOffsetInput = document.querySelector<HTMLInputElement>("#option
 const optionInputOffsetInput = document.querySelector<HTMLInputElement>("#option-input-offset")!;
 const optionJudgeLineInput = document.querySelector<HTMLInputElement>("#option-judge-line")!;
 const optionNoteSkinSelect = document.querySelector<HTMLSelectElement>("#option-note-skin")!;
+const presetButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".preset-btn"));
+const optionSavePresetBtn = document.querySelector<HTMLButtonElement>("#option-save-preset")!;
 const optionsStartBtn = document.querySelector<HTMLButtonElement>("#options-start-btn")!;
 const canvas = document.querySelector<HTMLCanvasElement>("#game-canvas")!;
 const ctx = canvas.getContext("2d")!;
@@ -652,6 +676,64 @@ optionArrangementToggle.addEventListener("click", () => {
   selectedArrangement = selectedArrangement === "normal" ? "mirror" : "normal";
   optionArrangementToggle.textContent = ARRANGEMENT_LABEL[selectedArrangement];
 });
+
+// 프리셋 3개. 슬롯이 비어있으면(한 번도 저장 안 함) null — 이때는 기본값을 보여준다.
+let presetSlots: PresetSlots = parsePresets(localStorage.getItem(PRESET_STORAGE_KEY));
+let activePresetIndex = parseActivePresetIndex(localStorage.getItem(ACTIVE_PRESET_STORAGE_KEY));
+
+function readOptionsSnapshot(): OptionsSnapshot {
+  return {
+    canvasWidthOption: optionCanvasWidthSelect.value as CanvasWidthOption,
+    effectiveGreenNumberMs: Number(optionGreenNumberInput.value),
+    arrangement: selectedArrangement,
+    audioOffsetMs: Number(optionAudioOffsetInput.value) || 0,
+    inputOffsetMs: Number(optionInputOffsetInput.value) || 0,
+    judgeLineMarginBottom: Number(optionJudgeLineInput.value) || JUDGE_LINE_MARGIN_BOTTOM,
+    noteSkinId: optionNoteSkinSelect.value,
+  };
+}
+
+function applySnapshotToInputs(snapshot: OptionsSnapshot): void {
+  optionCanvasWidthSelect.value = snapshot.canvasWidthOption;
+  optionGreenNumberInput.value = String(snapshot.effectiveGreenNumberMs);
+  syncGreenNumberFromInput(); // clamp/반올림 + 배속 입력과 동기화
+  selectedArrangement = snapshot.arrangement;
+  optionArrangementToggle.textContent = ARRANGEMENT_LABEL[selectedArrangement];
+  optionAudioOffsetInput.value = String(snapshot.audioOffsetMs);
+  optionInputOffsetInput.value = String(snapshot.inputOffsetMs);
+  optionJudgeLineInput.value = String(snapshot.judgeLineMarginBottom);
+  optionNoteSkinSelect.value = snapshot.noteSkinId;
+}
+
+function highlightActivePreset(): void {
+  presetButtons.forEach((btn, i) => btn.classList.toggle("active", i === activePresetIndex));
+}
+
+// 프리셋 버튼 클릭 -> 해당 슬롯으로 전환하고 저장된 값(없으면 기본값)을 불러온다.
+presetButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    activePresetIndex = clampPresetIndex(Number(btn.dataset.presetIndex));
+    localStorage.setItem(ACTIVE_PRESET_STORAGE_KEY, String(activePresetIndex));
+    applySnapshotToInputs(presetSlots[activePresetIndex] ?? createDefaultSnapshot());
+    highlightActivePreset();
+  });
+});
+
+// 지금 화면에 있는 옵션 값을 현재 선택된 프리셋 슬롯에 저장한다.
+optionSavePresetBtn.addEventListener("click", () => {
+  presetSlots = presetSlots.map((slot, i) => (i === activePresetIndex ? readOptionsSnapshot() : slot));
+  localStorage.setItem(PRESET_STORAGE_KEY, serializePresets(presetSlots));
+
+  const original = optionSavePresetBtn.textContent;
+  optionSavePresetBtn.textContent = "저장됨";
+  setTimeout(() => {
+    optionSavePresetBtn.textContent = original;
+  }, 1000);
+});
+
+// 페이지 로드 시 마지막으로 선택했던 프리셋을 불러와 옵션 화면에 반영한다.
+applySnapshotToInputs(presetSlots[activePresetIndex] ?? createDefaultSnapshot());
+highlightActivePreset();
 
 optionsStartBtn.addEventListener("click", async () => {
   optionsStartBtn.disabled = true;
