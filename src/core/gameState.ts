@@ -38,3 +38,10 @@ export function applyJudgement(
     slowCount: state.slowCount + (sign === "SLOW" ? 1 : 0),
   };
 }
+
+// 홀드 틱 1건을 반영한다. 콤보만 증가하고 점수/판정 집계/FAST-SLOW는 그대로 둔다
+// (SPEC.md 3절 — 틱은 "처리 중" 표시용이며 채점 대상이 아니다).
+export function applyHoldTick(state: GameState): GameState {
+  const combo = state.combo + 1;
+  return { ...state, combo, maxCombo: Math.max(state.maxCombo, combo) };
+}

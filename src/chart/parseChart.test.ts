@@ -47,4 +47,30 @@ describe("parseChart", () => {
     const chart = parseChart({ ...validChart, notes: [{ time: 0, lane: "scratch", type: "tap" }] });
     expect(chart.notes[0].lane).toBe("scratch");
   });
+
+  it("채보 전체 holdTickIntervalBeats를 파싱한다", () => {
+    const chart = parseChart({ ...validChart, holdTickIntervalBeats: 0.5 });
+    expect(chart.holdTickIntervalBeats).toBe(0.5);
+  });
+
+  it("holdTickIntervalBeats가 숫자가 아니면 에러를 던진다", () => {
+    expect(() => parseChart({ ...validChart, holdTickIntervalBeats: "x" })).toThrow();
+  });
+
+  it("홀드 노트별 tickIntervalBeats 오버라이드를 파싱한다", () => {
+    const chart = parseChart({
+      ...validChart,
+      notes: [{ time: 0, lane: 0, type: "hold", duration: 300, tickIntervalBeats: 2 }],
+    });
+    expect(chart.notes[0].tickIntervalBeats).toBe(2);
+  });
+
+  it("노트의 tickIntervalBeats가 숫자가 아니면 에러를 던진다", () => {
+    expect(() =>
+      parseChart({
+        ...validChart,
+        notes: [{ time: 0, lane: 0, type: "hold", duration: 300, tickIntervalBeats: "x" }],
+      }),
+    ).toThrow();
+  });
 });

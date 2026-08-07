@@ -9,6 +9,7 @@ export interface ChartNote {
   lane: NoteLane;
   type: NoteType;
   duration?: number; // ms, hold 노트에서만 사용
+  tickIntervalBeats?: number; // 선택. hold 노트별 홀드 틱 간격(비트) 오버라이드
 }
 
 export interface BpmChange {
@@ -24,5 +25,6 @@ export interface Chart {
   offset: number; // ms, 오디오 시작과 0박 사이 보정
   bpmChanges: BpmChange[]; // time 오름차순 정렬 보장 (parseChart가 정렬함)
   level: number;
+  holdTickIntervalBeats?: number; // 선택. 채보 전체 홀드 틱 간격(비트) 기본값
   notes: ChartNote[]; // time 오름차순 정렬 보장 (parseChart가 정렬함)
 }

@@ -11,7 +11,7 @@ export function isChartComplete(
 ): boolean {
   const judgeableTimes = chart.notes
     .filter((note) => JUDGEABLE_LANES.includes(note.lane))
-    .map((note) => note.time);
+    .map((note) => (note.type === "hold" ? note.time + (note.duration ?? 0) : note.time));
 
   if (judgeableTimes.length === 0) return true;
 

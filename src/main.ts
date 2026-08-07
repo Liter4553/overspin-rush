@@ -8,8 +8,9 @@ import { drawFxNotes, drawJudgeLine, drawLaneBackground, drawNotes } from "./ren
 import { addJudgmentTick, drawJudgmentBar, type JudgmentTick, type TickSource } from "./render/judgmentBar";
 import { drawJudgmentText, type LatestJudgment } from "./render/judgmentText";
 import { applyAutoMiss, createNoteTracker, findNearestPendingNote, markJudged } from "./core/noteState";
-import { applyJudgement, createGameState } from "./core/gameState";
+import { applyHoldTick, applyJudgement, createGameState } from "./core/gameState";
 import { computeErrorMs, displaySign, judge } from "./core/judge";
+import { advanceHoldTicks, computeTickIntervalMs, startActiveHold, type ActiveHold } from "./core/holdState";
 import { resolveLaneFromKey } from "./input/keyboard";
 import {
   accumulateMovement,
@@ -207,6 +208,9 @@ let judgmentTicks: JudgmentTick[] = [];
 let latestJudgment: LatestJudgment | null = null;
 let scratchAccumulator = createScratchAccumulator();
 let scratchDirectionState = createScratchDirectionState();
+// 레인당 활성 홀드는 최대 1개. keyup 시 즉시 삭제되므로("재개되지 않음") 맵에
+// 남아 있다는 것 자체가 "지금 눌려서 틱이 발생 중"이라는 뜻이다.
+let activeHolds = new Map<NoteLane, ActiveHold>();
 
 function formatTime(seconds: number): string {
   const clamped = Math.max(0, seconds);
@@ -278,6 +282,19 @@ function judgeAndApply(lane: NoteLane, inputTimeMs: number, source: TickSource):
 
   markJudged(found, result.grade, errorMs);
   gameState = applyJudgement(gameState, result.grade, result.score, sign);
+
+  // 홀드는 시작 판정 1회뿐(SPEC.md 3절) — 이후 누르고 있는 동안의 틱은 여기서 활성화만
+  // 등록해두고, 실제 발생은 renderLoop가 매 프레임 audioClock 시각으로 계산한다.
+  if (found.note.type === "hold") {
+    const tickIntervalMs = computeTickIntervalMs(
+      chart.bpmChanges,
+      found.note.time,
+      found.note.tickIntervalBeats,
+      chart.holdTickIntervalBeats,
+    );
+    activeHolds.set(lane, startActiveHold(found.note, tickIntervalMs));
+  }
+
   judgmentTicks = addJudgmentTick(judgmentTicks, {
     errorMs,
     grade: result.grade,
@@ -384,6 +401,16 @@ function handleKeydown(event: KeyboardEvent): void {
 
 window.addEventListener("keydown", handleKeydown);
 
+// 키를 떼는 순간 그 레인의 활성 홀드를 맵에서 제거한다 — 이후 틱은 다시 발생하지
+// 않는다(다시 눌러도 이어지지 않음, SPEC.md 3절). MISS 판정은 별도로 없다.
+function handleKeyup(event: KeyboardEvent): void {
+  const lane = resolveLaneFromKey(event.key, DEFAULT_KEYMAP);
+  if (lane === null) return;
+  activeHolds.delete(lane);
+}
+
+window.addEventListener("keyup", handleKeyup);
+
 // 스크래치는 Pointer Lock 중에만 movementY를 받는다. 누적->임계값->방향 상태
 // 머신을 거쳐 유효한 방향 전환일 때만 판정 파이프라인을 태운다.
 function handleMouseMove(event: MouseEvent): void {
@@ -404,6 +431,24 @@ function handleMouseMove(event: MouseEvent): void {
 
 document.addEventListener("mousemove", handleMouseMove);
 
+// 활성 홀드마다 놓친 틱을 캐치업 처리하고, 끝(endTimeMs)을 지난 홀드는 맵에서 정리한다.
+function processHoldTicks(currentTimeMs: number): void {
+  for (const [lane, hold] of activeHolds) {
+    const { hold: nextHold, tickCount, expired } = advanceHoldTicks(hold, currentTimeMs);
+    if (expired) {
+      activeHolds.delete(lane);
+      continue;
+    }
+    if (tickCount > 0) {
+      for (let i = 0; i < tickCount; i++) {
+        gameState = applyHoldTick(gameState);
+      }
+      activeHolds.set(lane, nextHold);
+      updateHud();
+    }
+  }
+}
+
 // rAF는 렌더링 전용. 판정 로직에는 절대 쓰지 않는다 — 여기서는 화면 갱신만 담당.
 function renderLoop(): void {
   if (phase !== "playing") return; // 일시정지/결과 화면이면 루프를 멈춘다
@@ -421,10 +466,16 @@ function renderLoop(): void {
     updateHud();
   }
 
+  processHoldTicks(currentTimeMs);
+
   timeDisplay.textContent = formatTime(clock.currentTime);
   bpmDisplay.textContent = String(currentBpm(chart.bpmChanges, currentTimeMs));
 
-  const pendingNotes = noteTracker.filter((t) => t.state === "pending").map((t) => t.note);
+  // 홀드는 시작 판정 즉시 state가 "judged"로 바뀌지만, 꼬리(time+duration)가 판정선을
+  // 지날 때까지는 계속 그려야 한다 — 몸통이 누르자마자 사라지면 안 된다.
+  const pendingNotes = noteTracker
+    .filter((t) => t.state === "pending" || (t.note.type === "hold" && currentTimeMs <= t.note.time + (t.note.duration ?? 0)))
+    .map((t) => t.note);
 
   ctx.clearRect(0, 0, canvasWidth, CANVAS_HEIGHT);
   drawLaneBackground(ctx, layout);
@@ -449,6 +500,7 @@ async function startPlay(): Promise<void> {
   latestJudgment = null;
   scratchAccumulator = createScratchAccumulator();
   scratchDirectionState = createScratchDirectionState();
+  activeHolds = new Map();
   phase = "playing";
   gameplayView.hidden = false;
   resultsPanel.hidden = true;

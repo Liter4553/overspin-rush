@@ -34,7 +34,16 @@ function parseNote(value: unknown, index: number): ChartNote {
     if (typeof item.duration !== "number") {
       throw new Error(`notes[${index}]는 홀드 노트인데 duration이 없습니다.`);
     }
-    return { time: item.time, lane: item.lane, type: item.type, duration: item.duration };
+    if (item.tickIntervalBeats !== undefined && typeof item.tickIntervalBeats !== "number") {
+      throw new Error(`notes[${index}].tickIntervalBeats는 숫자여야 합니다.`);
+    }
+    return {
+      time: item.time,
+      lane: item.lane,
+      type: item.type,
+      duration: item.duration,
+      tickIntervalBeats: item.tickIntervalBeats as number | undefined,
+    };
   }
   return { time: item.time, lane: item.lane, type: item.type };
 }
@@ -51,6 +60,9 @@ export function parseChart(data: unknown): Chart {
   if (typeof raw.level !== "number") throw new Error("level은 숫자여야 합니다.");
   if (!Array.isArray(raw.bpmChanges)) throw new Error("bpmChanges는 배열이어야 합니다.");
   if (!Array.isArray(raw.notes)) throw new Error("notes는 배열이어야 합니다.");
+  if (raw.holdTickIntervalBeats !== undefined && typeof raw.holdTickIntervalBeats !== "number") {
+    throw new Error("holdTickIntervalBeats는 숫자여야 합니다.");
+  }
 
   const bpmChanges = raw.bpmChanges
     .map(parseBpmChange)
@@ -70,6 +82,7 @@ export function parseChart(data: unknown): Chart {
     offset: raw.offset,
     bpmChanges,
     level: raw.level,
+    holdTickIntervalBeats: raw.holdTickIntervalBeats as number | undefined,
     notes,
   };
 }

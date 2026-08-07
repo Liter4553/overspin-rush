@@ -47,4 +47,11 @@ describe("isChartComplete", () => {
     const chart = makeChart([{ time: 1000, lane: "fx", type: "tap" }]);
     expect(isChartComplete(chart, 0, 80)).toBe(true);
   });
+
+  it("홀드 노트는 시작 시각이 아니라 종료 시각(time+duration) 기준으로 완료를 판단한다", () => {
+    const chart = makeChart([{ time: 1000, lane: 0, type: "hold", duration: 2000 }]);
+    // 시작(1000) + 자동미스 윈도우(80)는 지났지만 홀드가 아직 끝나지 않았다(3000까지).
+    expect(isChartComplete(chart, 1081, 80)).toBe(false);
+    expect(isChartComplete(chart, 3081, 80)).toBe(true);
+  });
 });
