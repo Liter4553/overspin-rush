@@ -903,8 +903,12 @@ window.addEventListener("keydown", (event) => {
 document.addEventListener("click", (event) => {
   if (screen !== "songSelect") return;
   if (!songPopup.classList.contains("open")) return;
-  const target = event.target as Node;
-  if (songPopup.contains(target) || songListEl.contains(target)) return;
+  // event.target으로 contains()를 검사하면 안 된다 — 난이도 버튼처럼 클릭 시
+  // innerHTML을 다시 그리는 요소는 클릭 처리 도중 target이 DOM에서 떨어져나가
+  // songPopup.contains(target)가 false로 오판되는 버그가 있었다.
+  // composedPath()는 버블링 시작 시점의 경로를 그대로 담고 있어 안전하다.
+  const path = event.composedPath();
+  if (path.includes(songPopup) || path.includes(songListEl)) return;
   closeSongPopup();
 });
 
