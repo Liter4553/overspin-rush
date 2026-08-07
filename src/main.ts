@@ -102,7 +102,7 @@ app.innerHTML = `
   <h1>Overspin RUSH</h1>
 
   <div id="song-select-view">
-    <h2>선곡</h2>
+    <h2>SELECT</h2>
     <div class="song-list" id="song-list"></div>
     <div class="song-popup" id="song-popup">
       <div class="song-popup-inner">
@@ -111,8 +111,9 @@ app.innerHTML = `
           <div class="song-popup-title" id="song-popup-title"></div>
           <div class="song-popup-artist" id="song-popup-artist"></div>
           <div class="difficulty-buttons" id="song-popup-difficulty"></div>
+          <button type="button" id="song-popup-mirror-toggle" class="mirror-toggle"></button>
         </div>
-        <button id="song-popup-start-btn">곡 시작</button>
+        <button id="song-popup-start-btn">START</button>
       </div>
     </div>
   </div>
@@ -145,10 +146,6 @@ app.innerHTML = `
     <div class="option-row">
       <label for="option-green-number">그린넘버(ms)</label>
       <input type="number" id="option-green-number" min="${GREEN_NUMBER_MIN_MS}" max="${GREEN_NUMBER_MAX_MS}" value="${BASE_GREEN_NUMBER_MS}" />
-    </div>
-    <div class="option-row">
-      <label for="option-arrangement-toggle">노트 배치</label>
-      <button type="button" id="option-arrangement-toggle">정배</button>
     </div>
     <div class="option-row">
       <label for="option-audio-offset">오디오 오프셋(ms)</label>
@@ -228,7 +225,7 @@ app.innerHTML = `
     </div>
     <div class="results-buttons">
       <button id="restart-btn">다시하기</button>
-      <button id="results-song-select-btn">선곡</button>
+      <button id="results-song-select-btn">SELECT</button>
     </div>
   </div>
 `;
@@ -246,12 +243,12 @@ const songPopupJacket = document.querySelector<HTMLDivElement>("#song-popup-jack
 const songPopupTitle = document.querySelector<HTMLDivElement>("#song-popup-title")!;
 const songPopupArtist = document.querySelector<HTMLDivElement>("#song-popup-artist")!;
 const songPopupDifficultyEl = document.querySelector<HTMLDivElement>("#song-popup-difficulty")!;
+const songPopupMirrorToggle = document.querySelector<HTMLButtonElement>("#song-popup-mirror-toggle")!;
 const songPopupStartBtn = document.querySelector<HTMLButtonElement>("#song-popup-start-btn")!;
 const optionsOverlay = document.querySelector<HTMLDivElement>("#options-overlay")!;
 const optionCanvasWidthSelect = document.querySelector<HTMLSelectElement>("#option-canvas-width")!;
 const optionSpeedInput = document.querySelector<HTMLInputElement>("#option-speed")!;
 const optionGreenNumberInput = document.querySelector<HTMLInputElement>("#option-green-number")!;
-const optionArrangementToggle = document.querySelector<HTMLButtonElement>("#option-arrangement-toggle")!;
 const optionAudioOffsetInput = document.querySelector<HTMLInputElement>("#option-audio-offset")!;
 const optionInputOffsetInput = document.querySelector<HTMLInputElement>("#option-input-offset")!;
 const optionJudgeLineInput = document.querySelector<HTMLInputElement>("#option-judge-line")!;
@@ -718,12 +715,6 @@ function syncGreenNumberFromInput(): void {
 optionSpeedInput.addEventListener("change", syncSpeedFromInput);
 optionGreenNumberInput.addEventListener("change", syncGreenNumberFromInput);
 
-const ARRANGEMENT_LABEL: Readonly<Record<Arrangement, string>> = { normal: "정배", mirror: "미러" };
-optionArrangementToggle.addEventListener("click", () => {
-  selectedArrangement = selectedArrangement === "normal" ? "mirror" : "normal";
-  optionArrangementToggle.textContent = ARRANGEMENT_LABEL[selectedArrangement];
-});
-
 // 프리셋 3개. 슬롯이 비어있으면(한 번도 저장 안 함) null — 이때는 기본값을 보여준다.
 let presetSlots: PresetSlots = parsePresets(localStorage.getItem(PRESET_STORAGE_KEY));
 let activePresetIndex = parseActivePresetIndex(localStorage.getItem(ACTIVE_PRESET_STORAGE_KEY));
@@ -744,8 +735,7 @@ function applySnapshotToInputs(snapshot: OptionsSnapshot): void {
   optionCanvasWidthSelect.value = snapshot.canvasWidthOption;
   optionGreenNumberInput.value = String(snapshot.effectiveGreenNumberMs);
   syncGreenNumberFromInput(); // clamp/반올림 + 배속 입력과 동기화
-  selectedArrangement = snapshot.arrangement;
-  optionArrangementToggle.textContent = ARRANGEMENT_LABEL[selectedArrangement];
+  selectedArrangement = snapshot.arrangement; // 토글 UI는 선곡 팝업에 있음 — 팝업 열 때 동기화(updateMirrorToggleLabel)
   optionAudioOffsetInput.value = String(snapshot.audioOffsetMs);
   optionInputOffsetInput.value = String(snapshot.inputOffsetMs);
   optionJudgeLineInput.value = String(snapshot.judgeLineMarginBottom);
@@ -848,7 +838,10 @@ function renderSongList(): void {
           <div class="song-item-artist">${song.artist}</div>
         </div>
         <div class="song-item-levels">
-          ${DIFFICULTIES.map((d) => `<span class="level-badge level-${d}">${DIFFICULTY_LABEL[d]} ${song.levels[d]}</span>`).join("")}
+          ${DIFFICULTIES.map(
+            (d) =>
+              `<div class="level-block level-${d}"><span class="level-block-label">${DIFFICULTY_LABEL[d]}</span><span class="level-block-value">${song.levels[d]}</span></div>`,
+          ).join("")}
         </div>
       </button>`,
   ).join("");
@@ -861,6 +854,19 @@ function renderPopupDifficultyButtons(song: SongEntry): void {
   ).join("");
 }
 
+// 미러 옵션 토글(팝업). "정배/미러"보다 포괄적으로 읽히도록 ON/OFF 표기로 통일.
+const MIRROR_LABEL: Readonly<Record<Arrangement, string>> = { normal: "MIRROR OFF", mirror: "MIRROR ON" };
+
+function updateMirrorToggleLabel(): void {
+  songPopupMirrorToggle.textContent = MIRROR_LABEL[selectedArrangement];
+  songPopupMirrorToggle.classList.toggle("active", selectedArrangement === "mirror");
+}
+
+songPopupMirrorToggle.addEventListener("click", () => {
+  selectedArrangement = selectedArrangement === "normal" ? "mirror" : "normal";
+  updateMirrorToggleLabel();
+});
+
 function openSongPopup(songId: string): void {
   selectedSongId = songId;
   const song = findSong(songId);
@@ -868,6 +874,7 @@ function openSongPopup(songId: string): void {
   songPopupTitle.textContent = song.title;
   songPopupArtist.textContent = song.artist;
   renderPopupDifficultyButtons(song);
+  updateMirrorToggleLabel();
   songPopup.classList.add("open");
 }
 

@@ -186,7 +186,7 @@ h1 {
 #song-select-view {
   position: relative;
   width: min(720px, 94vw);
-  height: min(600px, 78vh);
+  height: min(700px, 85vh);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -217,9 +217,8 @@ h1 {
 
 .song-item {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px;
+  align-items: stretch;
+  padding: 0;
   border: 1px solid #2a2c38;
   border-radius: 6px;
   background: #12161f;
@@ -227,6 +226,7 @@ h1 {
   text-align: left;
   cursor: pointer;
   font-family: inherit;
+  overflow: hidden;
 }
 
 .song-item:hover {
@@ -235,8 +235,10 @@ h1 {
 
 .song-item-jacket {
   flex: none;
+  align-self: center;
   width: 48px;
   height: 48px;
+  margin: 10px 0 10px 10px;
   border-radius: 4px;
   background: linear-gradient(135deg, #378add, #5dcaa5);
 }
@@ -246,7 +248,9 @@ h1 {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 2px;
+  padding: 10px 12px;
 }
 
 .song-item-title {
@@ -261,35 +265,48 @@ h1 {
   color: #8b93a7;
 }
 
+/* 난이도를 세로로 쌓는 대신 가로로 나열된 블록 3개로 표시 (오른쪽 끝에 꽉 차게) */
 .song-item-levels {
   flex: none;
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  align-items: flex-end;
+  flex-direction: row;
 }
 
-.level-badge {
+.level-block {
+  width: 70px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.level-block-label {
   font-size: 0.65rem;
-  padding: 2px 6px;
-  border-radius: 10px;
+  font-weight: bold;
+  letter-spacing: 0.03em;
   font-family: "Consolas", monospace;
-  white-space: nowrap;
+}
+
+.level-block-value {
+  font-size: 1.2rem;
+  font-weight: bold;
+  font-family: "Consolas", monospace;
 }
 
 .level-easy {
-  background: #4fc3f733;
-  color: #4fc3f7;
+  background: #4fc3f7;
+  color: #0b0d12;
 }
 
 .level-normal {
-  background: #ffd43b33;
-  color: #ffd43b;
+  background: #ffd43b;
+  color: #0b0d12;
 }
 
 .level-hard {
-  background: #fa525233;
-  color: #fa5252;
+  background: #fa5252;
+  color: #0b0d12;
 }
 
 .song-popup {
@@ -390,6 +407,24 @@ h1 {
   border-color: #fa5252;
   color: #fa5252;
   background: #fa525222;
+}
+
+.mirror-toggle {
+  align-self: flex-start;
+  padding: 5px 12px;
+  border: 1px solid #2a2c38;
+  border-radius: 4px;
+  background: #12161f;
+  color: #e8eaf0;
+  font-family: "Consolas", monospace;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.mirror-toggle.active {
+  border-color: #7dd3fc;
+  color: #7dd3fc;
+  background: #7dd3fc22;
 }
 
 #song-popup-start-btn {
