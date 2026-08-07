@@ -4,7 +4,7 @@ import { currentBpm } from "./core/scroll";
 import { parseChart } from "./chart/parseChart";
 import { dummyChartRaw } from "./chart/dummyChart";
 import { computeLaneLayout } from "./render/canvas";
-import { drawFxNotes, drawJudgeLine, drawLaneBackground, drawNotes } from "./render/noteRenderer";
+import { drawFxNotes, drawJudgeLine, drawLaneBackground, drawNotes, type NoteColors } from "./render/noteRenderer";
 import { addJudgmentTick, drawJudgmentBar, type JudgmentTick, type TickSource } from "./render/judgmentBar";
 import { drawComboDisplay, drawJudgmentText, type LatestJudgment } from "./render/judgmentText";
 import { applyAutoMiss, createNoteTracker, findNearestPendingNote, markJudged } from "./core/noteState";
@@ -33,12 +33,19 @@ import {
   CANVAS_WIDTH_OPTIONS,
   DEFAULT_CANVAS_WIDTH_OPTION,
   DEFAULT_KEYMAP,
+  DEFAULT_NOTE_SKIN_ID,
   DEFAULT_SCRATCH_SIDE,
   GREEN_NUMBER_MAX_MS,
   GREEN_NUMBER_MIN_MS,
   INPUT_OFFSET_MS,
   JUDGEABLE_LANES,
+  JUDGE_LINE_MARGIN_BOTTOM,
+  JUDGE_LINE_MARGIN_MAX,
+  JUDGE_LINE_MARGIN_MIN,
   NOTE_JUDGMENT_TABLE,
+  NOTE_SKIN_PALETTES,
+  OFFSET_MAX_MS,
+  OFFSET_MIN_MS,
   PAUSE_TRIGGER_KEY,
   RESULTS_SCALE_BOOST,
   RESUME_COUNTDOWN_SECONDS,
@@ -102,6 +109,27 @@ app.innerHTML = `
     <div class="option-row">
       <label for="option-arrangement-toggle">노트 배치</label>
       <button type="button" id="option-arrangement-toggle">정배</button>
+    </div>
+    <div class="option-row">
+      <label for="option-audio-offset">오디오 오프셋(ms)</label>
+      <input type="number" id="option-audio-offset" min="${OFFSET_MIN_MS}" max="${OFFSET_MAX_MS}" value="${AUDIO_OFFSET_MS}" />
+    </div>
+    <div class="option-row">
+      <label for="option-input-offset">입력 오프셋(ms)</label>
+      <input type="number" id="option-input-offset" min="${OFFSET_MIN_MS}" max="${OFFSET_MAX_MS}" value="${INPUT_OFFSET_MS}" />
+    </div>
+    <div class="option-row">
+      <label for="option-judge-line">판정선 위치(px)</label>
+      <input type="number" id="option-judge-line" min="${JUDGE_LINE_MARGIN_MIN}" max="${JUDGE_LINE_MARGIN_MAX}" value="${JUDGE_LINE_MARGIN_BOTTOM}" />
+    </div>
+    <div class="option-row">
+      <label for="option-note-skin">노트 스킨</label>
+      <select id="option-note-skin">
+        ${NOTE_SKIN_PALETTES.map(
+          (palette) =>
+            `<option value="${palette.id}"${palette.id === DEFAULT_NOTE_SKIN_ID ? " selected" : ""}>${palette.label}</option>`,
+        ).join("")}
+      </select>
     </div>
     <button id="options-start-btn">시작</button>
   </div>
@@ -172,6 +200,10 @@ const optionCanvasWidthSelect = document.querySelector<HTMLSelectElement>("#opti
 const optionSpeedInput = document.querySelector<HTMLInputElement>("#option-speed")!;
 const optionGreenNumberInput = document.querySelector<HTMLInputElement>("#option-green-number")!;
 const optionArrangementToggle = document.querySelector<HTMLButtonElement>("#option-arrangement-toggle")!;
+const optionAudioOffsetInput = document.querySelector<HTMLInputElement>("#option-audio-offset")!;
+const optionInputOffsetInput = document.querySelector<HTMLInputElement>("#option-input-offset")!;
+const optionJudgeLineInput = document.querySelector<HTMLInputElement>("#option-judge-line")!;
+const optionNoteSkinSelect = document.querySelector<HTMLSelectElement>("#option-note-skin")!;
 const optionsStartBtn = document.querySelector<HTMLButtonElement>("#options-start-btn")!;
 const canvas = document.querySelector<HTMLCanvasElement>("#game-canvas")!;
 const ctx = canvas.getContext("2d")!;
@@ -190,7 +222,7 @@ resultGradePanel.innerHTML = gradePanelHtml("result-grade", false);
 // 캔버스 폭은 옵션 화면에서 "시작"을 누르는 시점에 확정된다(applySelectedLayout).
 let canvasWidth = CANVAS_WIDTH_OPTIONS[DEFAULT_CANVAS_WIDTH_OPTION];
 const dpr = window.devicePixelRatio || 1;
-let layout = computeLaneLayout(canvasWidth, DEFAULT_SCRATCH_SIDE);
+let layout = computeLaneLayout(canvasWidth, DEFAULT_SCRATCH_SIDE, JUDGE_LINE_MARGIN_BOTTOM);
 const chart = parseChart(dummyChartRaw);
 // 실제 플레이에 쓰이는 채보. 원본 chart는 절대 변형하지 않고, 배치 옵션을 적용한
 // 새 노트 배열로 매 플레이 시작 시 다시 만든다(SPEC.md 6절).
@@ -200,12 +232,12 @@ function buildPlayChart(baseChart: Chart, arrangement: Arrangement): Chart {
   return { ...baseChart, notes: applyArrangement(baseChart.notes, arrangement) };
 }
 
-// 선택된 캔버스 폭을 실제 스타일/레이아웃에 반영한다. 옵션 화면 "시작" 클릭 시 호출.
-function applySelectedLayout(canvasWidthOption: CanvasWidthOption): void {
+// 선택된 캔버스 폭/판정선 위치를 실제 스타일/레이아웃에 반영한다. 옵션 화면 "시작" 클릭 시 호출.
+function applySelectedLayout(canvasWidthOption: CanvasWidthOption, judgeLineMarginBottom: number): void {
   canvasWidth = CANVAS_WIDTH_OPTIONS[canvasWidthOption];
   canvas.style.width = `${canvasWidth}px`;
   canvas.style.height = `${CANVAS_HEIGHT}px`;
-  layout = computeLaneLayout(canvasWidth, DEFAULT_SCRATCH_SIDE);
+  layout = computeLaneLayout(canvasWidth, DEFAULT_SCRATCH_SIDE, judgeLineMarginBottom);
 }
 
 // 캔버스 비트맵 해상도를 dpr과 화면 맞춤 배율(uiScale) 둘 다 반영해서 설정한다.
@@ -275,6 +307,9 @@ let activeHolds = new Map<NoteLane, ActiveHold>();
 // 진짜 상태는 이 값 하나뿐(SPEC.md 6절) — 배속은 이 값을 표시/조작하는 입력 경로일 뿐이다.
 let effectiveGreenNumberMs = BASE_GREEN_NUMBER_MS;
 let selectedArrangement: Arrangement = "normal";
+let audioOffsetMs = AUDIO_OFFSET_MS;
+let inputOffsetMs = INPUT_OFFSET_MS;
+let activeNoteColors: NoteColors = NOTE_SKIN_PALETTES[0];
 
 function updateSpeedDisplay(): void {
   const speed = greenNumberMsToSpeed(effectiveGreenNumberMs, BASE_GREEN_NUMBER_MS);
@@ -345,7 +380,7 @@ function judgeAndApply(lane: NoteLane, inputTimeMs: number, source: TickSource):
   const found = findNearestPendingNote(noteTracker, lane, inputTimeMs, AUTO_MISS_WINDOW_MS);
   if (found === null) return; // 판정 가능한 노트가 없으면 조용히 무시
 
-  const errorMs = computeErrorMs(inputTimeMs, found.note.time, AUDIO_OFFSET_MS, INPUT_OFFSET_MS);
+  const errorMs = computeErrorMs(inputTimeMs, found.note.time, audioOffsetMs, inputOffsetMs);
   const result = judge(Math.abs(errorMs), table);
   const sign = displaySign(result.grade, errorMs);
 
@@ -556,8 +591,8 @@ function renderLoop(): void {
 
   ctx.clearRect(0, 0, canvasWidth, CANVAS_HEIGHT);
   drawLaneBackground(ctx, layout);
-  drawFxNotes(ctx, layout, pendingNotes, currentTimeMs, effectiveGreenNumberMs);
-  drawNotes(ctx, layout, pendingNotes, currentTimeMs, effectiveGreenNumberMs);
+  drawFxNotes(ctx, layout, pendingNotes, currentTimeMs, effectiveGreenNumberMs, activeNoteColors);
+  drawNotes(ctx, layout, pendingNotes, currentTimeMs, effectiveGreenNumberMs, activeNoteColors);
   drawJudgeLine(ctx, layout);
   drawJudgmentBar(ctx, layout, judgmentTicks, currentTimeMs);
   drawJudgmentText(ctx, layout, latestJudgment, currentTimeMs);
@@ -622,10 +657,19 @@ optionsStartBtn.addEventListener("click", async () => {
   optionsStartBtn.disabled = true;
   optionsStartBtn.textContent = "실행 중";
 
-  applySelectedLayout(optionCanvasWidthSelect.value as CanvasWidthOption);
+  const judgeLineMarginBottom = Math.min(
+    JUDGE_LINE_MARGIN_MAX,
+    Math.max(JUDGE_LINE_MARGIN_MIN, Number(optionJudgeLineInput.value) || JUDGE_LINE_MARGIN_BOTTOM),
+  );
+  applySelectedLayout(optionCanvasWidthSelect.value as CanvasWidthOption, judgeLineMarginBottom);
   syncSpeedFromInput(); // 입력값을 정규화(clamp/반올림)해서 그린넘버 입력과 최종 일치시킨다.
   effectiveGreenNumberMs = Number(optionGreenNumberInput.value);
   updateSpeedDisplay();
+
+  audioOffsetMs = Math.min(OFFSET_MAX_MS, Math.max(OFFSET_MIN_MS, Number(optionAudioOffsetInput.value) || 0));
+  inputOffsetMs = Math.min(OFFSET_MAX_MS, Math.max(OFFSET_MIN_MS, Number(optionInputOffsetInput.value) || 0));
+  activeNoteColors =
+    NOTE_SKIN_PALETTES.find((palette) => palette.id === optionNoteSkinSelect.value) ?? NOTE_SKIN_PALETTES[0];
 
   optionsView.hidden = true;
   gameplayView.hidden = false;

@@ -1,19 +1,24 @@
 import {
-  FX_COLOR,
   FX_OPACITY,
   JUDGE_LINE_COLOR,
   LANE_DIVIDER_COLOR,
-  NOTE_COLOR,
   NOTE_HEIGHT,
   NOTE_INSET,
   SCRATCH_DIAMOND_INSET_RATIO,
   SCRATCH_LANE_TINT_COLOR,
   SCRATCH_LANE_TINT_OPACITY,
-  SCRATCH_NOTE_COLOR,
 } from "../config";
 import type { ChartNote } from "../chart/types";
 import { noteY } from "../core/scroll";
 import type { LaneLayout } from "./canvas";
+
+// 노트 스킨 팔레트가 실제로 렌더링에 쓰는 색 3가지. 나머지(오파시티, 레인 틴트 등)는
+// 커스터마이즈 대상이 아니라 고정 상수로 남긴다(SPEC.md 6절 — 노트 스킨 색상만 옵션).
+export interface NoteColors {
+  noteColor: string;
+  fxColor: string;
+  scratchColor: string;
+}
 
 // 렌더 순서(SPEC.md 3절): 레인 배경 → FX 노트 → 일반 노트 → 판정선 → 이펙트(추후).
 // 아래 draw 함수들은 이 순서로 호출되어야 FX 바가 일반 노트에 가려지지 않는다.
@@ -46,11 +51,12 @@ export function drawFxNotes(
   notes: ChartNote[],
   currentTimeMs: number,
   greenNumberMs: number,
+  colors: NoteColors,
 ): void {
   const fxRegionX = layout.noteLaneX[0];
   const fxRegionWidth = layout.noteLaneWidth * layout.noteLaneX.length;
 
-  ctx.fillStyle = FX_COLOR;
+  ctx.fillStyle = colors.fxColor;
   ctx.globalAlpha = FX_OPACITY;
   for (const note of notes) {
     if (note.lane !== "fx") continue;
@@ -75,6 +81,7 @@ export function drawNotes(
   notes: ChartNote[],
   currentTimeMs: number,
   greenNumberMs: number,
+  colors: NoteColors,
 ): void {
   for (const note of notes) {
     if (note.lane === "fx") continue;
@@ -90,17 +97,17 @@ export function drawNotes(
 
       ctx.beginPath();
       ctx.roundRect(frameX, frameY, frameWidth, NOTE_HEIGHT, frameRadius);
-      ctx.fillStyle = SCRATCH_NOTE_COLOR;
+      ctx.fillStyle = colors.scratchColor;
       ctx.globalAlpha = 0.18;
       ctx.fill();
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = SCRATCH_NOTE_COLOR;
+      ctx.strokeStyle = colors.scratchColor;
       ctx.lineWidth = 2;
       ctx.stroke();
 
       const cx = frameX + frameWidth / 2;
       const half = (NOTE_HEIGHT / 2) * (1 - SCRATCH_DIAMOND_INSET_RATIO);
-      ctx.fillStyle = SCRATCH_NOTE_COLOR;
+      ctx.fillStyle = colors.scratchColor;
       ctx.beginPath();
       ctx.moveTo(cx, y - half);
       ctx.lineTo(cx + half, y);
@@ -118,10 +125,10 @@ export function drawNotes(
     if (note.type === "hold") {
       const startY = noteY(note.time, currentTimeMs, greenNumberMs, layout.judgeLineY);
       const endY = noteY(note.time + (note.duration ?? 0), currentTimeMs, greenNumberMs, layout.judgeLineY);
-      drawNoteRect(ctx, x, width, endY, startY, NOTE_COLOR);
+      drawNoteRect(ctx, x, width, endY, startY, colors.noteColor);
     } else {
       const y = noteY(note.time, currentTimeMs, greenNumberMs, layout.judgeLineY);
-      drawNoteRect(ctx, x, width, y - NOTE_HEIGHT / 2, y + NOTE_HEIGHT / 2, NOTE_COLOR);
+      drawNoteRect(ctx, x, width, y - NOTE_HEIGHT / 2, y + NOTE_HEIGHT / 2, colors.noteColor);
     }
   }
 }

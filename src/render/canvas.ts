@@ -1,10 +1,4 @@
-import {
-  CANVAS_HEIGHT,
-  JUDGE_LINE_MARGIN_BOTTOM,
-  LANE_COUNT,
-  SCRATCH_WIDTH_EXTRA,
-  type ScratchSide,
-} from "../config";
+import { CANVAS_HEIGHT, LANE_COUNT, SCRATCH_WIDTH_EXTRA, type ScratchSide } from "../config";
 
 export interface LaneLayout {
   canvasWidth: number;
@@ -19,7 +13,11 @@ export interface LaneLayout {
 
 // 캔버스 폭과 스크래치 레인 위치로부터 각 레인의 x좌표를 계산하는 순수 함수.
 // 스크래치 레인 폭 = 노트 레인 폭 + SCRATCH_WIDTH_EXTRA (SPEC.md 2절).
-export function computeLaneLayout(canvasWidth: number, scratchSide: ScratchSide): LaneLayout {
+export function computeLaneLayout(
+  canvasWidth: number,
+  scratchSide: ScratchSide,
+  judgeLineMarginBottom: number,
+): LaneLayout {
   const noteLaneWidth = (canvasWidth - SCRATCH_WIDTH_EXTRA) / (LANE_COUNT + 1);
   const scratchLaneWidth = noteLaneWidth + SCRATCH_WIDTH_EXTRA;
   const noteRegionX = scratchSide === "left" ? scratchLaneWidth : 0;
@@ -34,6 +32,6 @@ export function computeLaneLayout(canvasWidth: number, scratchSide: ScratchSide)
     scratchLaneWidth,
     noteLaneX,
     scratchLaneX,
-    judgeLineY: CANVAS_HEIGHT - JUDGE_LINE_MARGIN_BOTTOM,
+    judgeLineY: CANVAS_HEIGHT - judgeLineMarginBottom,
   };
 }

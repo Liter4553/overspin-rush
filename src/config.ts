@@ -26,8 +26,10 @@ export type ScratchSide = "left" | "right";
 // 오른손 마우스 사용자가 다수이므로 기본값은 오른쪽.
 export const DEFAULT_SCRATCH_SIDE: ScratchSide = "right";
 
-// 판정선이 캔버스 하단에서 떨어진 거리(px).
+// 판정선이 캔버스 하단에서 떨어진 거리(px). 기본값이며 옵션 화면에서 조절 가능.
 export const JUDGE_LINE_MARGIN_BOTTOM = 120;
+export const JUDGE_LINE_MARGIN_MIN = 40;
+export const JUDGE_LINE_MARGIN_MAX = 400;
 
 // --- 스크롤(그린넘버) ---
 // 배속 1.0x 기준 그린넘버(ms).
@@ -60,6 +62,25 @@ export const SCRATCH_LANE_TINT_OPACITY = 0.14;
 export const JUDGE_LINE_COLOR = "#D85A30";
 export const LANE_DIVIDER_COLOR = "rgba(255, 255, 255, 0.15)";
 
+// --- 노트 스킨 색상 (SPEC.md 6절) ---
+// 자유 색상 선택 대신 가독성 검증된 팔레트 5종 중에서 고른다.
+export interface NoteSkinPalette {
+  id: string;
+  label: string;
+  noteColor: string;
+  fxColor: string;
+  scratchColor: string;
+}
+
+export const NOTE_SKIN_PALETTES: readonly NoteSkinPalette[] = [
+  { id: "default", label: "기본", noteColor: NOTE_COLOR, fxColor: FX_COLOR, scratchColor: SCRATCH_NOTE_COLOR },
+  { id: "neon", label: "네온", noteColor: "#6C5CE7", fxColor: "#FD79A8", scratchColor: "#00CEC9" },
+  { id: "sunset", label: "선셋", noteColor: "#FF6B6B", fxColor: "#FFA94D", scratchColor: "#4DABF7" },
+  { id: "forest", label: "포레스트", noteColor: "#63B85C", fxColor: "#E8B33D", scratchColor: "#22B8CF" },
+  { id: "ice", label: "아이스", noteColor: "#74B9FF", fxColor: "#A29BFE", scratchColor: "#81ECEC" },
+];
+export const DEFAULT_NOTE_SKIN_ID = "default";
+
 // --- 판정 (SPEC.md 4절) ---
 // 각 값은 패스트/슬로우 각각의 한계값(대칭). windowMs 오름차순 유지 필수.
 export const NOTE_JUDGMENT_TABLE: readonly JudgeTableEntry[] = [
@@ -79,9 +100,11 @@ export const SCRATCH_JUDGMENT_TABLE: readonly JudgeTableEntry[] = [
 // 노트가 슬로우 쪽으로 이 값(ms)을 지나면 자동 MISS. GOOD 윈도우와 동일해야 한다.
 export const AUTO_MISS_WINDOW_MS = 80;
 
-// 사용자 조정 가능한 오디오/입력 오프셋(ms). 실제 조절 UI는 마일스톤 8.
+// 사용자 조정 가능한 오디오/입력 오프셋(ms) 기본값. 옵션 화면에서 실시간으로 바꿀 수 있다.
 export const AUDIO_OFFSET_MS = 0;
 export const INPUT_OFFSET_MS = 0;
+export const OFFSET_MIN_MS = -300;
+export const OFFSET_MAX_MS = 300;
 
 // --- 키 입력 ---
 // 마일스톤 8 리매핑 UI가 이 맵만 교체하면 되도록 분리.
