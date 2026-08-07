@@ -41,3 +41,21 @@ export function drawJudgmentText(
   }
   ctx.textAlign = "left";
 }
+
+// 콤보를 판정 텍스트 바로 위에 상시 표시한다(깜빡이지 않음). 상단 HUD를 따로
+// 보지 않아도 판정이 뜨는 자리만 보면 콤보까지 같이 확인되게 하기 위함.
+export function drawComboDisplay(ctx: CanvasRenderingContext2D, layout: LaneLayout, combo: number): void {
+  if (combo <= 0) return;
+
+  const cx = layout.canvasWidth / 2;
+  const y = layout.judgeLineY - 90;
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#F2E9D8";
+  ctx.font = "bold 28px sans-serif";
+  ctx.fillText(String(combo), cx, y);
+  ctx.fillStyle = "#8b93a7";
+  ctx.font = "11px sans-serif";
+  ctx.fillText("COMBO", cx, y + 16);
+  ctx.textAlign = "left";
+}

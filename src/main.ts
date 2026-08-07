@@ -6,7 +6,7 @@ import { dummyChartRaw } from "./chart/dummyChart";
 import { computeLaneLayout } from "./render/canvas";
 import { drawFxNotes, drawJudgeLine, drawLaneBackground, drawNotes } from "./render/noteRenderer";
 import { addJudgmentTick, drawJudgmentBar, type JudgmentTick, type TickSource } from "./render/judgmentBar";
-import { drawJudgmentText, type LatestJudgment } from "./render/judgmentText";
+import { drawComboDisplay, drawJudgmentText, type LatestJudgment } from "./render/judgmentText";
 import { applyAutoMiss, createNoteTracker, findNearestPendingNote, markJudged } from "./core/noteState";
 import { applyHoldTick, applyJudgement, createGameState } from "./core/gameState";
 import { computeErrorMs, displaySign, judge } from "./core/judge";
@@ -484,6 +484,7 @@ function renderLoop(): void {
   drawJudgeLine(ctx, layout);
   drawJudgmentBar(ctx, layout, judgmentTicks, currentTimeMs);
   drawJudgmentText(ctx, layout, latestJudgment, currentTimeMs);
+  drawComboDisplay(ctx, layout, gameState.combo);
 
   if (isChartComplete(chart, currentTimeMs, AUTO_MISS_WINDOW_MS)) {
     showResults();
