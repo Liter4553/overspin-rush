@@ -48,14 +48,14 @@ export function drawComboDisplay(ctx: CanvasRenderingContext2D, layout: LaneLayo
   if (combo <= 0) return;
 
   const cx = layout.canvasWidth / 2;
-  const y = layout.judgeLineY - 130;
+  const y = layout.judgeLineY - 105;
 
   ctx.textAlign = "center";
   ctx.fillStyle = "#F2E9D8";
-  ctx.font = "bold 34px sans-serif";
+  ctx.font = "bold 51px sans-serif";
   ctx.fillText(String(combo), cx, y);
   ctx.fillStyle = "#8b93a7";
-  ctx.font = "13px sans-serif";
-  ctx.fillText("COMBO", cx, y + 20);
+  ctx.font = "20px sans-serif";
+  ctx.fillText("COMBO", cx, y + 28);
   ctx.textAlign = "left";
 }
