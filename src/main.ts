@@ -106,7 +106,7 @@ app.innerHTML = `
     <div class="song-list" id="song-list"></div>
     <div class="song-popup" id="song-popup">
       <div class="song-popup-inner">
-        <div class="song-popup-jacket"></div>
+        <div class="song-popup-jacket" id="song-popup-jacket"></div>
         <div class="song-popup-info">
           <div class="song-popup-title" id="song-popup-title"></div>
           <div class="song-popup-artist" id="song-popup-artist"></div>
@@ -242,6 +242,7 @@ const gradePanel = document.querySelector<HTMLDivElement>("#grade-panel")!;
 const songSelectView = document.querySelector<HTMLDivElement>("#song-select-view")!;
 const songListEl = document.querySelector<HTMLDivElement>("#song-list")!;
 const songPopup = document.querySelector<HTMLDivElement>("#song-popup")!;
+const songPopupJacket = document.querySelector<HTMLDivElement>("#song-popup-jacket")!;
 const songPopupTitle = document.querySelector<HTMLDivElement>("#song-popup-title")!;
 const songPopupArtist = document.querySelector<HTMLDivElement>("#song-popup-artist")!;
 const songPopupDifficultyEl = document.querySelector<HTMLDivElement>("#song-popup-difficulty")!;
@@ -833,11 +834,15 @@ function findSong(id: string): SongEntry {
   return song;
 }
 
+function jacketGradient(song: SongEntry): string {
+  return `linear-gradient(135deg, ${song.jacketColors[0]}, ${song.jacketColors[1]})`;
+}
+
 function renderSongList(): void {
   songListEl.innerHTML = SONG_LIST.map(
     (song) => `
       <button type="button" class="song-item" data-song-id="${song.id}">
-        <div class="song-item-jacket"></div>
+        <div class="song-item-jacket" style="background:${jacketGradient(song)}"></div>
         <div class="song-item-meta">
           <div class="song-item-title">${song.title}</div>
           <div class="song-item-artist">${song.artist}</div>
@@ -859,10 +864,16 @@ function renderPopupDifficultyButtons(song: SongEntry): void {
 function openSongPopup(songId: string): void {
   selectedSongId = songId;
   const song = findSong(songId);
+  songPopupJacket.style.background = jacketGradient(song);
   songPopupTitle.textContent = song.title;
   songPopupArtist.textContent = song.artist;
   renderPopupDifficultyButtons(song);
   songPopup.classList.add("open");
+}
+
+function closeSongPopup(): void {
+  songPopup.classList.remove("open");
+  selectedSongId = null;
 }
 
 songListEl.addEventListener("click", (event) => {
@@ -878,6 +889,23 @@ songPopupDifficultyEl.addEventListener("click", (event) => {
   if (btn === null || selectedSongId === null) return;
   selectedDifficulty = btn.dataset.difficulty as Difficulty;
   renderPopupDifficultyButtons(findSong(selectedSongId));
+});
+
+// Esc를 누르거나 팝업/곡 목록 바깥을 클릭하면 팝업이 닫힌다. 곡 목록 클릭은
+// 다른 곡을 고르는 정상 동작이라 닫힘 대상에서 제외한다.
+window.addEventListener("keydown", (event) => {
+  if (screen !== "songSelect") return;
+  if (event.key !== "Escape") return;
+  if (!songPopup.classList.contains("open")) return;
+  closeSongPopup();
+});
+
+document.addEventListener("click", (event) => {
+  if (screen !== "songSelect") return;
+  if (!songPopup.classList.contains("open")) return;
+  const target = event.target as Node;
+  if (songPopup.contains(target) || songListEl.contains(target)) return;
+  closeSongPopup();
 });
 
 // "곡 시작": 선택된 곡의 채보로 교체하고 게임 화면으로 넘어간다. 난이도는 지금은

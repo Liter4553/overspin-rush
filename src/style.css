@@ -268,18 +268,18 @@ h1 {
 }
 
 .level-easy {
-  background: #22b8cf33;
-  color: #22b8cf;
+  background: #4fc3f733;
+  color: #4fc3f7;
 }
 
 .level-normal {
-  background: #85b7eb33;
-  color: #85b7eb;
+  background: #ffd43b33;
+  color: #ffd43b;
 }
 
 .level-hard {
-  background: #f0959533;
-  color: #f09595;
+  background: #fa525233;
+  color: #fa5252;
 }
 
 .song-popup {
@@ -287,7 +287,7 @@ h1 {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 33.34%;
+  height: 40%;
   background: #161a24;
   border-top: 1px solid #2a2c38;
   transform: translateY(100%);
@@ -301,17 +301,17 @@ h1 {
 .song-popup-inner {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 17px;
   height: 100%;
   box-sizing: border-box;
-  padding: 16px 20px;
+  padding: 20px 24px;
 }
 
 .song-popup-jacket {
   flex: none;
-  width: 72px;
-  height: 72px;
-  border-radius: 6px;
+  width: 86px;
+  height: 86px;
+  border-radius: 7px;
   background: linear-gradient(135deg, #378add, #5dcaa5);
 }
 
@@ -320,47 +320,72 @@ h1 {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
 }
 
 .song-popup-title {
   font-weight: bold;
-  font-size: 1.1rem;
+  font-size: 1.3rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .song-popup-artist {
-  font-size: 0.85rem;
+  font-size: 1rem;
   color: #8b93a7;
 }
 
 .difficulty-buttons {
   display: flex;
-  gap: 6px;
+  gap: 7px;
 }
 
 .difficulty-btn {
-  padding: 4px 10px;
+  padding: 5px 12px;
   border: 1px solid #2a2c38;
   border-radius: 4px;
   background: #12161f;
   color: #e8eaf0;
   font-family: "Consolas", monospace;
-  font-size: 0.75rem;
+  font-size: 0.9rem;
   cursor: pointer;
 }
 
-.difficulty-btn.active {
-  border-color: #7dd3fc;
-  color: #7dd3fc;
+.difficulty-btn.diff-easy {
+  color: #4fc3f7cc;
+}
+
+.difficulty-btn.diff-normal {
+  color: #ffd43bcc;
+}
+
+.difficulty-btn.diff-hard {
+  color: #fa5252cc;
+}
+
+.difficulty-btn.diff-easy.active {
+  border-color: #4fc3f7;
+  color: #4fc3f7;
+  background: #4fc3f722;
+}
+
+.difficulty-btn.diff-normal.active {
+  border-color: #ffd43b;
+  color: #ffd43b;
+  background: #ffd43b22;
+}
+
+.difficulty-btn.diff-hard.active {
+  border-color: #fa5252;
+  color: #fa5252;
+  background: #fa525222;
 }
 
 #song-popup-start-btn {
   flex: none;
-  padding: 12px 20px;
-  font-size: 0.95rem;
+  padding: 14px 24px;
+  font-size: 1.15rem;
   border: 1px solid #7dd3fc;
   border-radius: 6px;
   background: transparent;
