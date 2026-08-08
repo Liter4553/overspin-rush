@@ -10,6 +10,7 @@ import {
   INPUT_OFFSET_MS,
   JUDGE_LINE_MARGIN_BOTTOM,
   PRESET_COUNT,
+  SCRATCH_THRESHOLD,
 } from "../config";
 
 export interface OptionsSnapshot {
@@ -20,6 +21,7 @@ export interface OptionsSnapshot {
   inputOffsetMs: number;
   judgeLineMarginBottom: number;
   noteSkinId: string;
+  scratchThreshold: number;
 }
 
 export function createDefaultSnapshot(): OptionsSnapshot {
@@ -31,6 +33,7 @@ export function createDefaultSnapshot(): OptionsSnapshot {
     inputOffsetMs: INPUT_OFFSET_MS,
     judgeLineMarginBottom: JUDGE_LINE_MARGIN_BOTTOM,
     noteSkinId: DEFAULT_NOTE_SKIN_ID,
+    scratchThreshold: SCRATCH_THRESHOLD,
   };
 }
 
@@ -51,7 +54,8 @@ function isValidSnapshot(value: unknown): value is OptionsSnapshot {
     typeof v.audioOffsetMs === "number" &&
     typeof v.inputOffsetMs === "number" &&
     typeof v.judgeLineMarginBottom === "number" &&
-    typeof v.noteSkinId === "string"
+    typeof v.noteSkinId === "string" &&
+    typeof v.scratchThreshold === "number"
   );
 }
 

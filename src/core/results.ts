@@ -1,8 +1,19 @@
 import type { Chart } from "../chart/types";
 import type { GameState } from "./gameState";
+import { displaySign } from "./judge";
 import type { JudgeGrade } from "./judge";
 import type { TrackedNote } from "./noteState";
-import { ERROR_HISTOGRAM_BUCKET_MS, JUDGEABLE_LANES, JUDGMENT_BAR_RANGE_MS } from "../config";
+import { JUDGEABLE_LANES } from "../config";
+
+// PERFECT+는 정타 취급이라 FAST/SLOW 구분이 없다(judge.ts의 displaySign 규칙과 동일) —
+// 그래서 가운데/빠름/느림 분포에서는 PERFECT+를 뺀 4개 등급만 방향을 가진다.
+export type FastSlowGrade = "PERFECT" | "GREAT" | "GOOD" | "MISS";
+
+export interface GradeTimingBreakdown {
+  centerCount: number; // PERFECT+
+  fastCounts: Record<FastSlowGrade, number>;
+  slowCounts: Record<FastSlowGrade, number>;
+}
 
 export interface ResultsSummary {
   score: number;
@@ -12,23 +23,34 @@ export interface ResultsSummary {
   maxCombo: number;
   fastCount: number;
   slowCount: number;
-  errorHistogram: number[]; // 좌측(FAST)부터 우측(SLOW) 순서의 버킷별 개수
+  gradeTimingBreakdown: GradeTimingBreakdown;
 }
 
-// ±JUDGMENT_BAR_RANGE_MS 범위를 ERROR_HISTOGRAM_BUCKET_MS 폭으로 나눈 버킷에
-// 오차값들을 채운다. 범위를 벗어나는 값(이론상 발생 안 함)은 가장 바깥 버킷으로 클램프.
-export function computeErrorHistogram(errors: readonly number[]): number[] {
-  const bucketCount = Math.round((JUDGMENT_BAR_RANGE_MS * 2) / ERROR_HISTOGRAM_BUCKET_MS);
-  const buckets = new Array(bucketCount).fill(0) as number[];
+function emptyFastSlowCounts(): Record<FastSlowGrade, number> {
+  return { PERFECT: 0, GREAT: 0, GOOD: 0, MISS: 0 };
+}
 
-  for (const errorMs of errors) {
-    const clamped = Math.max(-JUDGMENT_BAR_RANGE_MS, Math.min(JUDGMENT_BAR_RANGE_MS, errorMs));
-    const rawIndex = Math.floor((clamped + JUDGMENT_BAR_RANGE_MS) / ERROR_HISTOGRAM_BUCKET_MS);
-    const index = Math.min(bucketCount - 1, Math.max(0, rawIndex));
-    buckets[index] += 1;
+// 판정 결과를 가운데(PERFECT+)/빠름(FAST)/느림(SLOW)으로 나눠 등급별로 집계한다.
+// errorMs가 없는 판정(현재는 자동 MISS뿐 — noteState.applyAutoMiss 참고)은 방향을
+// 알 수 없어 어느 쪽에도 넣지 않는다(즉 FAST/SLOW MISS는 지금 게임 메커니즘상 항상 0).
+export function computeGradeTimingBreakdown(tracker: readonly TrackedNote[]): GradeTimingBreakdown {
+  const fastCounts = emptyFastSlowCounts();
+  const slowCounts = emptyFastSlowCounts();
+  let centerCount = 0;
+
+  for (const t of tracker) {
+    if (t.state !== "judged" || t.grade === null) continue;
+    if (t.grade === "PERFECT_PLUS") {
+      centerCount += 1;
+      continue;
+    }
+    if (t.errorMs === null) continue;
+    const sign = displaySign(t.grade, t.errorMs);
+    if (sign === "FAST") fastCounts[t.grade] += 1;
+    else if (sign === "SLOW") slowCounts[t.grade] += 1;
   }
 
-  return buckets;
+  return { centerCount, fastCounts, slowCounts };
 }
 
 function countJudgeableNotes(chart: Chart): number {
@@ -43,10 +65,6 @@ export function computeResults(
   const theoreticalMax = countJudgeableNotes(chart) * 4;
   const accuracyPercent = theoreticalMax === 0 ? 0 : (gameState.score / theoreticalMax) * 100;
 
-  const errors = tracker
-    .filter((t): t is TrackedNote & { errorMs: number } => t.state === "judged" && t.errorMs !== null)
-    .map((t) => t.errorMs);
-
   return {
     score: gameState.score,
     theoreticalMax,
@@ -55,6 +73,6 @@ export function computeResults(
     maxCombo: gameState.maxCombo,
     fastCount: gameState.fastCount,
     slowCount: gameState.slowCount,
-    errorHistogram: computeErrorHistogram(errors),
+    gradeTimingBreakdown: computeGradeTimingBreakdown(tracker),
   };
 }

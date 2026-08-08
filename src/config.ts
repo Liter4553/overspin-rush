@@ -140,10 +140,6 @@ export const JUDGE_TEXT_DISPLAY_MS = 500;
 // 판정이 붙는 레인. 마일스톤 7에서 FX가 추가되어 이제 모든 레인이 판정 대상이다.
 export const JUDGEABLE_LANES: readonly NoteLane[] = [0, 1, 2, "fx", "scratch"];
 
-// 오차 분포 히스토그램 버킷 폭(ms). JUDGMENT_BAR_RANGE_MS(80)를 이 값으로 나눠
-// 좌우 대칭 버킷 개수를 만든다.
-export const ERROR_HISTOGRAM_BUCKET_MS = 10;
-
 // --- 화면 맞춤(뷰포트 핏) ---
 // 플레이 영역+HUD 전체를 브라우저 세로 길이에 맞춰 확대/축소할 때 쓰는 값.
 export const VIEWPORT_FIT_MARGIN_PX = 16;
@@ -156,7 +152,10 @@ export const RESULTS_SCALE_BOOST = 1.46;
 
 // --- 스크래치 입력 (SPEC.md 2절) ---
 // mousemove movementY 누적이 이 값(px)을 넘으면 스크래치 입력 1회로 인정.
+// 값이 작을수록(=마우스 감도가 높을수록) 적은 움직임으로도 인정된다. 옵션 화면에서 조절 가능.
 export const SCRATCH_THRESHOLD = 20;
+export const SCRATCH_THRESHOLD_MIN = 5;
+export const SCRATCH_THRESHOLD_MAX = 60;
 // 마지막 유효 스크래치로부터 이 시간(ms)이 지나면 방향 제한이 풀린다.
 export const SCRATCH_DIR_RESET_MS = 2000;
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isChartComplete } from "./chartCompletion";
+import { chartDurationMs, isChartComplete } from "./chartCompletion";
 import type { Chart } from "../chart/types";
 
 function makeChart(notes: Chart["notes"]): Chart {
@@ -54,5 +54,24 @@ describe("isChartComplete", () => {
     // 시작(1000) + 자동미스 윈도우(80)는 지났지만 홀드가 아직 끝나지 않았다(3000까지).
     expect(isChartComplete(chart, 1081, 80)).toBe(false);
     expect(isChartComplete(chart, 3081, 80)).toBe(true);
+  });
+});
+
+describe("chartDurationMs", () => {
+  it("마지막 판정 대상 노트 시각 + 자동 MISS 윈도우를 반환한다", () => {
+    const chart = makeChart([
+      { time: 1000, lane: 0, type: "tap" },
+      { time: 9000, lane: "fx", type: "tap" },
+    ]);
+    expect(chartDurationMs(chart, 80)).toBe(9080);
+  });
+
+  it("홀드 노트는 종료 시각(time+duration) 기준으로 계산한다", () => {
+    const chart = makeChart([{ time: 1000, lane: 0, type: "hold", duration: 2000 }]);
+    expect(chartDurationMs(chart, 80)).toBe(3080);
+  });
+
+  it("판정 대상 노트가 없으면 0이다", () => {
+    expect(chartDurationMs(makeChart([]), 80)).toBe(0);
   });
 });

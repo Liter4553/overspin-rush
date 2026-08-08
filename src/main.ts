@@ -29,8 +29,8 @@ import {
   createScratchAccumulator,
   createScratchDirectionState,
 } from "./core/scratchInput";
-import { isChartComplete } from "./core/chartCompletion";
-import { computeResults } from "./core/results";
+import { chartDurationMs, isChartComplete } from "./core/chartCompletion";
+import { computeResults, type GradeTimingBreakdown } from "./core/results";
 import { computeFitScale } from "./render/viewportScale";
 import { DIFFICULTIES, DIFFICULTY_LABEL, SONG_LIST, type Difficulty, type SongEntry } from "./chart/songList";
 import type { Chart, NoteLane } from "./chart/types";
@@ -50,6 +50,7 @@ import {
   GREEN_NUMBER_MIN_MS,
   INPUT_OFFSET_MS,
   JUDGEABLE_LANES,
+  JUDGE_GRADE_COLORS,
   JUDGE_LINE_MARGIN_BOTTOM,
   JUDGE_LINE_MARGIN_MAX,
   JUDGE_LINE_MARGIN_MIN,
@@ -65,6 +66,8 @@ import {
   SCRATCH_DIR_RESET_MS,
   SCRATCH_JUDGMENT_TABLE,
   SCRATCH_THRESHOLD,
+  SCRATCH_THRESHOLD_MAX,
+  SCRATCH_THRESHOLD_MIN,
   SPEED_DECREASE_KEY,
   SPEED_INCREASE_KEY,
   SPEED_MAX,
@@ -160,6 +163,10 @@ app.innerHTML = `
       <input type="number" id="option-judge-line" min="${JUDGE_LINE_MARGIN_MIN}" max="${JUDGE_LINE_MARGIN_MAX}" value="${JUDGE_LINE_MARGIN_BOTTOM}" />
     </div>
     <div class="option-row">
+      <label for="option-scratch-threshold">마우스 감도(스크래치 임계값 px)</label>
+      <input type="number" id="option-scratch-threshold" min="${SCRATCH_THRESHOLD_MIN}" max="${SCRATCH_THRESHOLD_MAX}" value="${SCRATCH_THRESHOLD}" />
+    </div>
+    <div class="option-row">
       <label for="option-note-skin">노트 스킨</label>
       <select id="option-note-skin">
         ${NOTE_SKIN_PALETTES.map(
@@ -221,7 +228,7 @@ app.innerHTML = `
     <div class="histogram-wrap">
       <span class="histogram-corner histogram-corner-fast">FAST <span id="result-grade-fast">0</span></span>
       <span class="histogram-corner histogram-corner-slow">SLOW <span id="result-grade-slow">0</span></span>
-      <div class="histogram" id="result-histogram"></div>
+      <div class="timing-chart" id="result-timing-chart"></div>
     </div>
     <div class="results-buttons">
       <button id="restart-btn">다시하기</button>
@@ -252,6 +259,7 @@ const optionGreenNumberInput = document.querySelector<HTMLInputElement>("#option
 const optionAudioOffsetInput = document.querySelector<HTMLInputElement>("#option-audio-offset")!;
 const optionInputOffsetInput = document.querySelector<HTMLInputElement>("#option-input-offset")!;
 const optionJudgeLineInput = document.querySelector<HTMLInputElement>("#option-judge-line")!;
+const optionScratchThresholdInput = document.querySelector<HTMLInputElement>("#option-scratch-threshold")!;
 const optionNoteSkinSelect = document.querySelector<HTMLSelectElement>("#option-note-skin")!;
 const presetButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".preset-btn"));
 const optionSavePresetBtn = document.querySelector<HTMLButtonElement>("#option-save-preset")!;
@@ -264,7 +272,7 @@ const pauseCountdown = document.querySelector<HTMLDivElement>("#pause-countdown"
 const resumeBtn = document.querySelector<HTMLButtonElement>("#resume-btn")!;
 const resultsPanel = document.querySelector<HTMLDivElement>("#results-panel")!;
 const resultGradePanel = document.querySelector<HTMLDivElement>("#result-grade-panel")!;
-const resultHistogram = document.querySelector<HTMLDivElement>("#result-histogram")!;
+const resultTimingChart = document.querySelector<HTMLDivElement>("#result-timing-chart")!;
 const restartBtn = document.querySelector<HTMLButtonElement>("#restart-btn")!;
 const resultsSongSelectBtn = document.querySelector<HTMLButtonElement>("#results-song-select-btn")!;
 
@@ -371,10 +379,13 @@ let scratchDirectionState = createScratchDirectionState();
 let activeHolds = new Map<NoteLane, ActiveHold>();
 // 진짜 상태는 이 값 하나뿐(SPEC.md 6절) — 배속은 이 값을 표시/조작하는 입력 경로일 뿐이다.
 let effectiveGreenNumberMs = BASE_GREEN_NUMBER_MS;
+// 곡 전체 길이(ms). TIME 표시를 카운트다운으로 보여주기 위해 플레이 시작 시 한 번 계산해둔다.
+let songDurationMs = 0;
 let selectedArrangement: Arrangement = "normal";
 let audioOffsetMs = AUDIO_OFFSET_MS;
 let inputOffsetMs = INPUT_OFFSET_MS;
 let activeNoteColors: NoteColors = NOTE_SKIN_PALETTES[0];
+let scratchThresholdPx = SCRATCH_THRESHOLD;
 
 function updateSpeedDisplay(): void {
   const speed = greenNumberMsToSpeed(effectiveGreenNumberMs, BASE_GREEN_NUMBER_MS);
@@ -399,13 +410,30 @@ function updateHud(): void {
   document.querySelector("#grade-slow")!.textContent = String(gameState.slowCount);
 }
 
-function renderHistogram(counts: readonly number[]): void {
-  const maxCount = Math.max(1, ...counts);
-  resultHistogram.innerHTML = counts
-    .map((count, i) => {
+// 판정 종류와 통일된 막대그래프: 가운데 PERFECT+, 좌우로 PERFECT/GREAT/GOOD/MISS가
+// 대칭으로 뻗어나간다(중심에 가까울수록 정타에 가까움). 색은 판정 색과 동일하게 맞춘다.
+const FAST_SLOW_ORDER = ["MISS", "GOOD", "GREAT", "PERFECT"] as const;
+
+function renderTimingChart(breakdown: GradeTimingBreakdown): void {
+  const bars = [
+    ...FAST_SLOW_ORDER.map((grade) => ({ grade, count: breakdown.fastCounts[grade] })),
+    { grade: "PERFECT_PLUS" as const, count: breakdown.centerCount },
+    ...[...FAST_SLOW_ORDER].reverse().map((grade) => ({ grade, count: breakdown.slowCounts[grade] })),
+  ];
+  const maxCount = Math.max(1, ...bars.map((b) => b.count));
+
+  resultTimingChart.innerHTML = bars
+    .map(({ grade, count }) => {
       const heightPercent = (count / maxCount) * 100;
-      const side = i < counts.length / 2 ? "fast" : "slow";
-      return `<div class="hist-bar hist-bar-${side}" style="height:${heightPercent}%" title="${count}건"></div>`;
+      const color = JUDGE_GRADE_COLORS[grade];
+      const label = grade.replace("_PLUS", "+");
+      return `
+        <div class="timing-bar-col">
+          <div class="timing-bar-track">
+            <div class="timing-bar" style="height:${heightPercent}%; background:${color}" title="${count}건"></div>
+          </div>
+          <div class="timing-bar-label" style="color:${color}">${label}</div>
+        </div>`;
     })
     .join("");
 }
@@ -423,7 +451,7 @@ function showResults(): void {
   }
   document.querySelector("#result-grade-fast")!.textContent = String(summary.fastCount);
   document.querySelector("#result-grade-slow")!.textContent = String(summary.slowCount);
-  renderHistogram(summary.errorHistogram);
+  renderTimingChart(summary.gradeTimingBreakdown);
 
   gameplayView.hidden = true;
   resultsPanel.hidden = false;
@@ -595,7 +623,7 @@ function handleMouseMove(event: MouseEvent): void {
   if (phase !== "playing") return;
   if (document.pointerLockElement !== canvas) return;
 
-  const accResult = accumulateMovement(scratchAccumulator, event.movementY, SCRATCH_THRESHOLD);
+  const accResult = accumulateMovement(scratchAccumulator, event.movementY, scratchThresholdPx);
   scratchAccumulator = accResult.state;
   if (accResult.direction === null) return;
 
@@ -645,7 +673,8 @@ function renderLoop(): void {
 
   processHoldTicks(currentTimeMs);
 
-  timeDisplay.textContent = formatTime(clock.currentTime);
+  // 카운트업 대신 곡이 끝날 때까지 남은 시간을 카운트다운으로 보여준다.
+  timeDisplay.textContent = formatTime((songDurationMs - currentTimeMs) / 1000);
   bpmDisplay.textContent = String(currentBpm(activeChart.bpmChanges, currentTimeMs));
 
   // 홀드는 시작 판정 즉시 state가 "judged"로 바뀌지만, 꼬리(time+duration)가 판정선을
@@ -673,6 +702,7 @@ function renderLoop(): void {
 
 async function startPlay(): Promise<void> {
   activeChart = buildPlayChart(chart, selectedArrangement);
+  songDurationMs = chartDurationMs(activeChart, AUTO_MISS_WINDOW_MS);
   noteTracker = createNoteTracker(activeChart);
   gameState = createGameState();
   judgmentTicks = [];
@@ -728,6 +758,7 @@ function readOptionsSnapshot(): OptionsSnapshot {
     inputOffsetMs: Number(optionInputOffsetInput.value) || 0,
     judgeLineMarginBottom: Number(optionJudgeLineInput.value) || JUDGE_LINE_MARGIN_BOTTOM,
     noteSkinId: optionNoteSkinSelect.value,
+    scratchThreshold: Number(optionScratchThresholdInput.value) || SCRATCH_THRESHOLD,
   };
 }
 
@@ -740,6 +771,7 @@ function applySnapshotToInputs(snapshot: OptionsSnapshot): void {
   optionInputOffsetInput.value = String(snapshot.inputOffsetMs);
   optionJudgeLineInput.value = String(snapshot.judgeLineMarginBottom);
   optionNoteSkinSelect.value = snapshot.noteSkinId;
+  optionScratchThresholdInput.value = String(snapshot.scratchThreshold);
 }
 
 function highlightActivePreset(): void {
@@ -789,6 +821,11 @@ function applyOptionsFromInputs(): void {
   inputOffsetMs = Math.min(OFFSET_MAX_MS, Math.max(OFFSET_MIN_MS, Number(optionInputOffsetInput.value) || 0));
   activeNoteColors =
     NOTE_SKIN_PALETTES.find((palette) => palette.id === optionNoteSkinSelect.value) ?? NOTE_SKIN_PALETTES[0];
+
+  scratchThresholdPx = Math.min(
+    SCRATCH_THRESHOLD_MAX,
+    Math.max(SCRATCH_THRESHOLD_MIN, Number(optionScratchThresholdInput.value) || SCRATCH_THRESHOLD),
+  );
 }
 
 function openOptionsOverlay(): void {

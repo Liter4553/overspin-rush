@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeErrorHistogram, computeResults } from "./results";
+import { computeGradeTimingBreakdown, computeResults } from "./results";
 import { createGameState, applyJudgement } from "./gameState";
 import { createNoteTracker, markJudged } from "./noteState";
 import { displaySign, judge } from "./judge";
@@ -19,17 +19,50 @@ function makeChart(notes: Chart["notes"]): Chart {
   };
 }
 
-describe("computeErrorHistogram", () => {
-  it("오차값을 10ms 버킷에 채운다", () => {
-    const histogram = computeErrorHistogram([-75, -15, 0, 15, 75]);
-    expect(histogram.reduce((a, b) => a + b, 0)).toBe(5);
-    expect(histogram.length).toBe(16); // (80*2)/10
+describe("computeGradeTimingBreakdown", () => {
+  it("PERFECT+는 항상 가운데로만 집계된다(FAST/SLOW 무관)", () => {
+    const chart = makeChart([{ time: 1000, lane: 0, type: "tap" }]);
+    const tracker = createNoteTracker(chart);
+    markJudged(tracker[0], "PERFECT_PLUS", -5);
+    const breakdown = computeGradeTimingBreakdown(tracker);
+    expect(breakdown.centerCount).toBe(1);
+    expect(breakdown.fastCounts.PERFECT).toBe(0);
   });
 
-  it("범위를 넘는 값은 가장 바깥 버킷으로 클램프된다", () => {
-    const histogram = computeErrorHistogram([-999, 999]);
-    expect(histogram[0]).toBe(1);
-    expect(histogram[histogram.length - 1]).toBe(1);
+  it("음수 오차(FAST)는 fastCounts에, 양수 오차(SLOW)는 slowCounts에 등급별로 쌓인다", () => {
+    const chart = makeChart([
+      { time: 1000, lane: 0, type: "tap" },
+      { time: 2000, lane: 1, type: "tap" },
+    ]);
+    const tracker = createNoteTracker(chart);
+    markJudged(tracker[0], "GREAT", -50);
+    markJudged(tracker[1], "GOOD", 70);
+    const breakdown = computeGradeTimingBreakdown(tracker);
+    expect(breakdown.fastCounts.GREAT).toBe(1);
+    expect(breakdown.slowCounts.GOOD).toBe(1);
+  });
+
+  it("errorMs가 없는 판정(자동 MISS)은 어느 쪽에도 집계되지 않는다", () => {
+    const chart = makeChart([{ time: 1000, lane: 0, type: "tap" }]);
+    const tracker = createNoteTracker(chart);
+    // applyAutoMiss가 실제로 만드는 상태와 동일(grade="MISS", errorMs=null)하게 직접 구성.
+    tracker[0].state = "judged";
+    tracker[0].grade = "MISS";
+    tracker[0].errorMs = null;
+    const breakdown = computeGradeTimingBreakdown(tracker);
+    expect(breakdown.fastCounts.MISS).toBe(0);
+    expect(breakdown.slowCounts.MISS).toBe(0);
+  });
+
+  it("아직 판정되지 않은 노트는 집계에서 제외된다", () => {
+    const chart = makeChart([
+      { time: 1000, lane: 0, type: "tap" },
+      { time: 2000, lane: 1, type: "tap" },
+    ]);
+    const tracker = createNoteTracker(chart);
+    markJudged(tracker[0], "PERFECT_PLUS", 5);
+    const breakdown = computeGradeTimingBreakdown(tracker);
+    expect(breakdown.centerCount).toBe(1);
   });
 });
 
@@ -74,14 +107,11 @@ describe("computeResults", () => {
     expect(results.accuracyPercent).toBe(0);
   });
 
-  it("아직 판정되지 않은(errorMs=null) 노트는 히스토그램에서 제외된다", () => {
-    const chart = makeChart([
-      { time: 1000, lane: 0, type: "tap" },
-      { time: 2000, lane: 1, type: "tap" },
-    ]);
+  it("결과에 등급별 가운데/빠름/느림 분포가 포함된다", () => {
+    const chart = makeChart([{ time: 1000, lane: 0, type: "tap" }]);
     const tracker = createNoteTracker(chart);
-    markJudged(tracker[0], "PERFECT_PLUS", 5);
+    markJudged(tracker[0], "PERFECT_PLUS", 0);
     const results = computeResults(chart, createGameState(), tracker);
-    expect(results.errorHistogram.reduce((a, b) => a + b, 0)).toBe(1);
+    expect(results.gradeTimingBreakdown.centerCount).toBe(1);
   });
 });
