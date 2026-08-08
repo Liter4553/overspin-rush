@@ -40,11 +40,6 @@ export function drawLaneBackground(ctx: CanvasRenderingContext2D, layout: LaneLa
   }
 }
 
-function fxBarY(note: ChartNote, currentTimeMs: number, greenNumberMs: number, judgeLineY: number): number {
-  const endTime = note.type === "hold" ? note.time + (note.duration ?? 0) : note.time;
-  return noteY(endTime, currentTimeMs, greenNumberMs, judgeLineY);
-}
-
 export function drawFxNotes(
   ctx: CanvasRenderingContext2D,
   layout: LaneLayout,
@@ -60,8 +55,20 @@ export function drawFxNotes(
   ctx.globalAlpha = FX_OPACITY;
   for (const note of notes) {
     if (note.lane !== "fx") continue;
-    const y = fxBarY(note, currentTimeMs, greenNumberMs, layout.judgeLineY);
-    ctx.fillRect(fxRegionX, y - NOTE_HEIGHT / 2, fxRegionWidth, NOTE_HEIGHT);
+
+    if (note.type === "hold") {
+      // 시작~끝 전체 구간을 막대로 그려야 한다. 예전에는 끝 시각 위치에만 얇은
+      // 바를 그려서, 시작을 눌러야 하는 시점엔 화면에 아무 것도 안 보이다가
+      // 홀드가 거의 끝나서야 막대가 나타나는 버그가 있었다(시작 판정을 놓쳐
+      // "아무것도 없는 구간에서 미스"로 보이는 원인).
+      const startY = noteY(note.time, currentTimeMs, greenNumberMs, layout.judgeLineY);
+      const endY = noteY(note.time + (note.duration ?? 0), currentTimeMs, greenNumberMs, layout.judgeLineY);
+      const height = Math.max(NOTE_HEIGHT, startY - endY);
+      ctx.fillRect(fxRegionX, endY, fxRegionWidth, height);
+    } else {
+      const y = noteY(note.time, currentTimeMs, greenNumberMs, layout.judgeLineY);
+      ctx.fillRect(fxRegionX, y - NOTE_HEIGHT / 2, fxRegionWidth, NOTE_HEIGHT);
+    }
   }
   ctx.globalAlpha = 1;
 }
