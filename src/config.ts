@@ -233,3 +233,6 @@ export const GAUGE_COEFFICIENT_LARGE_CHART_NUMERATOR = 800; // a = 이 값 / (n 
 export const GAUGE_COEFFICIENT_LARGE_CHART_OFFSET = 700;
 
 export const DEFAULT_GAUGE_TYPE: GaugeType = "normal";
+
+// HARD/CHALLENGE 폭사 시 레인 위에서 내려오는 FAILED 셔터 연출 시간(ms). CSS 애니메이션과 일치해야 한다.
+export const FAIL_SHUTTER_DROP_MS = 700;

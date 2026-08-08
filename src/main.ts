@@ -56,6 +56,7 @@ import {
   DEFAULT_KEYMAP,
   DEFAULT_NOTE_SKIN_ID,
   DEFAULT_SCRATCH_SIDE,
+  FAIL_SHUTTER_DROP_MS,
   GAUGE_TYPE_CONFIG,
   type GaugeType,
   GREEN_NUMBER_MAX_MS,
@@ -246,6 +247,9 @@ app.innerHTML = `
           <button id="resume-btn">재개</button>
         </div>
       </div>
+      <div class="fail-shutter" id="fail-shutter" hidden>
+        <span>FAILED</span>
+      </div>
     </div>
     <div class="grade-panel" id="grade-panel"></div>
   </div>
@@ -313,6 +317,7 @@ const gaugeBarTrack = document.querySelector<HTMLDivElement>("#gauge-bar-track")
 const gaugeBarFill = document.querySelector<HTMLDivElement>("#gauge-bar-fill")!;
 const gaugeBarPercent = document.querySelector<HTMLSpanElement>("#gauge-bar-percent")!;
 const pausePanel = document.querySelector<HTMLDivElement>("#pause-panel")!;
+const failShutter = document.querySelector<HTMLDivElement>("#fail-shutter")!;
 const pauseCountdown = document.querySelector<HTMLDivElement>("#pause-countdown")!;
 const resumeBtn = document.querySelector<HTMLButtonElement>("#resume-btn")!;
 const resultsPanel = document.querySelector<HTMLDivElement>("#results-panel")!;
@@ -513,6 +518,21 @@ function renderTimingChart(breakdown: GradeTimingBreakdown): void {
         </div>`;
     })
     .join("");
+}
+
+// HARD/CHALLENGE 게이지가 폭사(dead)했을 때만 호출된다(GAS로 구제되면 dead가 절대 true가
+// 되지 않는다 — gauge.ts의 relay 전환 로직 참고). 셔터가 다 내려온 뒤 결과 화면으로 넘어간다.
+function triggerFailure(): void {
+  phase = "results"; // 남은 입력/자동미스 처리를 즉시 막는다(showResults와 동일한 방식)
+  failShutter.hidden = false;
+  failShutter.classList.add("dropping");
+
+  if (document.pointerLockElement === canvas) {
+    ignoreNextUnlock = true;
+    document.exitPointerLock();
+  }
+
+  setTimeout(showResults, FAIL_SHUTTER_DROP_MS);
 }
 
 function showResults(): void {
@@ -773,6 +793,11 @@ function renderLoop(): void {
   drawJudgmentText(ctx, layout, latestJudgment, currentTimeMs);
   drawComboDisplay(ctx, layout, gameState.combo);
 
+  if (currentGauge(gaugePlayState).dead) {
+    triggerFailure();
+    return;
+  }
+
   if (isChartComplete(activeChart, currentTimeMs, AUTO_MISS_WINDOW_MS)) {
     showResults();
     return;
@@ -802,6 +827,8 @@ async function startPlay(): Promise<void> {
   gameplayView.hidden = false;
   resultsPanel.hidden = true;
   pausePanel.hidden = true;
+  failShutter.hidden = true;
+  failShutter.classList.remove("dropping");
   applyZoom();
   updateHud();
 
