@@ -241,3 +241,5 @@ export const FAIL_RESULTS_DELAY_MS = 3000;
 
 // 곡+난이도+게이지타입별 최고 클리어 등급 기록 저장 키.
 export const CLEAR_RECORDS_STORAGE_KEY = "overspin-rush:clearRecords";
+// 곡+난이도별 최고 점수 저장 키(게이지 타입과 무관).
+export const HIGH_SCORE_STORAGE_KEY = "overspin-rush:highScores";

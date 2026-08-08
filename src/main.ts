@@ -32,6 +32,13 @@ import {
   type ClearRecords,
 } from "./core/clearRecords";
 import {
+  highScoreKey,
+  parseHighScores,
+  serializeHighScores,
+  upsertHighScore,
+  type HighScores,
+} from "./core/highScores";
+import {
   clampPresetIndex,
   createDefaultSnapshot,
   parseActivePresetIndex,
@@ -72,6 +79,7 @@ import {
   type GaugeType,
   GREEN_NUMBER_MAX_MS,
   GREEN_NUMBER_MIN_MS,
+  HIGH_SCORE_STORAGE_KEY,
   INPUT_OFFSET_MS,
   JUDGEABLE_LANES,
   JUDGE_GRADE_COLORS,
@@ -137,6 +145,10 @@ app.innerHTML = `
         <div class="song-popup-info">
           <div class="song-popup-title" id="song-popup-title"></div>
           <div class="song-popup-artist" id="song-popup-artist"></div>
+          <div class="song-popup-status">
+            <span class="song-popup-hiscore">HI-SCORE <span id="song-popup-hiscore-value">0</span></span>
+            <div class="song-popup-clear-tags" id="song-popup-clear-tags"></div>
+          </div>
           <div class="difficulty-buttons" id="song-popup-difficulty"></div>
           <button type="button" id="song-popup-mirror-toggle" class="mirror-toggle"></button>
         </div>
@@ -267,7 +279,13 @@ app.innerHTML = `
   <div class="results-panel" id="results-panel" hidden>
     <h2>RESULT</h2>
     <div class="clear-grade-badge" id="clear-grade-badge"></div>
-    <div class="clear-grade-gauge" id="clear-grade-gauge"></div>
+    <div class="gauge-bar-wrap" id="result-gauge-bar-wrap">
+      <span class="gauge-bar-type" id="result-gauge-bar-type">NORMAL</span>
+      <div class="gauge-bar-track" id="result-gauge-bar-track">
+        <div class="gauge-bar-fill" id="result-gauge-bar-fill"></div>
+      </div>
+      <span class="gauge-bar-percent" id="result-gauge-bar-percent">0%</span>
+    </div>
     <div class="results-summary">
       <div class="summary-stat"><span class="summary-label">SCORE</span><span class="summary-value" id="result-score">0</span></div>
       <div class="summary-stat"><span class="summary-label">이론치</span><span class="summary-value" id="result-theoretical">0</span></div>
@@ -300,6 +318,8 @@ const songPopup = document.querySelector<HTMLDivElement>("#song-popup")!;
 const songPopupJacket = document.querySelector<HTMLDivElement>("#song-popup-jacket")!;
 const songPopupTitle = document.querySelector<HTMLDivElement>("#song-popup-title")!;
 const songPopupArtist = document.querySelector<HTMLDivElement>("#song-popup-artist")!;
+const songPopupHiScoreValue = document.querySelector<HTMLSpanElement>("#song-popup-hiscore-value")!;
+const songPopupClearTags = document.querySelector<HTMLDivElement>("#song-popup-clear-tags")!;
 const songPopupDifficultyEl = document.querySelector<HTMLDivElement>("#song-popup-difficulty")!;
 const songPopupMirrorToggle = document.querySelector<HTMLButtonElement>("#song-popup-mirror-toggle")!;
 const songPopupStartBtn = document.querySelector<HTMLButtonElement>("#song-popup-start-btn")!;
@@ -334,7 +354,9 @@ const pauseCountdown = document.querySelector<HTMLDivElement>("#pause-countdown"
 const resumeBtn = document.querySelector<HTMLButtonElement>("#resume-btn")!;
 const resultsPanel = document.querySelector<HTMLDivElement>("#results-panel")!;
 const clearGradeBadge = document.querySelector<HTMLDivElement>("#clear-grade-badge")!;
-const clearGradeGauge = document.querySelector<HTMLDivElement>("#clear-grade-gauge")!;
+const resultGaugeBarType = document.querySelector<HTMLSpanElement>("#result-gauge-bar-type")!;
+const resultGaugeBarFill = document.querySelector<HTMLDivElement>("#result-gauge-bar-fill")!;
+const resultGaugeBarPercent = document.querySelector<HTMLSpanElement>("#result-gauge-bar-percent")!;
 const resultGradePanel = document.querySelector<HTMLDivElement>("#result-grade-panel")!;
 const resultTimingChart = document.querySelector<HTMLDivElement>("#result-timing-chart")!;
 const restartBtn = document.querySelector<HTMLButtonElement>("#restart-btn")!;
@@ -458,6 +480,7 @@ let gaugeCoefficientA = 0;
 let gaugePlayState: GaugePlayState = createGaugePlayState(DEFAULT_GAUGE_TYPE, false);
 const ALL_GAUGE_TYPES = Object.keys(GAUGE_TYPE_CONFIG) as GaugeType[];
 let clearRecords: ClearRecords = parseClearRecords(localStorage.getItem(CLEAR_RECORDS_STORAGE_KEY));
+let highScores: HighScores = parseHighScores(localStorage.getItem(HIGH_SCORE_STORAGE_KEY));
 
 function updateSpeedDisplay(): void {
   const speed = greenNumberMsToSpeed(effectiveGreenNumberMs, BASE_GREEN_NUMBER_MS);
@@ -591,7 +614,10 @@ function showResults(): void {
   const clearGrade = computeClearGrade(activeChart, gameState, finalGauge);
   clearGradeBadge.textContent = CLEAR_GRADE_LABEL[clearGrade];
   clearGradeBadge.style.color = CLEAR_GRADE_COLOR[clearGrade];
-  clearGradeGauge.textContent = `게이지 ${Math.floor(finalGauge.value)}%`; // 1% 단위로 버림(HUD와 동일 규칙)
+  resultGaugeBarType.textContent = GAUGE_TYPE_CONFIG[finalGauge.type].label;
+  resultGaugeBarPercent.textContent = `${Math.floor(finalGauge.value)}%`; // 1% 단위로 버림(HUD와 동일 규칙)
+  resultGaugeBarFill.style.width = `${finalGauge.value}%`;
+  resultGaugeBarFill.style.background = gaugeBarColor(finalGauge);
 
   // 기록은 실제로 굴린 게이지 타입(activeGaugeType)을 기준으로 저장한다 — GAS로 전환됐다면
   // finalGauge.type은 이미 "normal"이지만, 플레이어가 시도한 모드는 여전히 HARD/CHALLENGE다.
@@ -602,6 +628,9 @@ function showResults(): void {
       clearGrade,
     );
     localStorage.setItem(CLEAR_RECORDS_STORAGE_KEY, serializeClearRecords(clearRecords));
+
+    highScores = upsertHighScore(highScores, highScoreKey(selectedSongId, selectedDifficulty), summary.score);
+    localStorage.setItem(HIGH_SCORE_STORAGE_KEY, serializeHighScores(highScores));
   }
 
   document.querySelector("#result-score")!.textContent = String(summary.score);
@@ -1128,6 +1157,48 @@ songPopupMirrorToggle.addEventListener("click", () => {
   updateMirrorToggleLabel();
 });
 
+// 게이지 타입별로 "클리어했다"를 표시할 때 쓰는 색 — 결과 화면/선곡 리스트와 동일한 기준.
+const GAUGE_ACHIEVED_COLOR: Readonly<Record<GaugeType, string>> = {
+  normal: CLEAR_GRADE_COLOR.CLEAR,
+  hard: CLEAR_GRADE_COLOR.HARD_CLEAR,
+  challenge: CLEAR_GRADE_COLOR.CHALLENGE_CLEAR,
+};
+
+// 팝업의 HI-SCORE와 클리어 태그(노말/하드/챌린지/풀콤보/퍼펙)를 지금 선택된 난이도
+// 기준으로 갱신한다. 풀콤보/퍼펙은 게이지 타입과 무관하게 셋 중 하나라도 달성했으면 켜진다.
+function renderSongPopupStatus(song: SongEntry): void {
+  songPopupHiScoreValue.textContent = String(highScores[highScoreKey(song.id, selectedDifficulty)] ?? 0);
+
+  const gradeByType: Partial<Record<GaugeType, ClearGrade>> = {};
+  for (const type of ALL_GAUGE_TYPES) {
+    gradeByType[type] = clearRecords[clearRecordKey(song.id, selectedDifficulty, type)];
+  }
+
+  const achievedFullCombo = ALL_GAUGE_TYPES.some(
+    (type) => gradeByType[type] === "FULL_COMBO" || gradeByType[type] === "PERFECT",
+  );
+  const achievedPerfect = ALL_GAUGE_TYPES.some((type) => gradeByType[type] === "PERFECT");
+
+  const tags: { label: string; achieved: boolean; color: string }[] = [
+    { label: "NORMAL", achieved: gradeByType.normal !== undefined && gradeByType.normal !== "FAILED", color: GAUGE_ACHIEVED_COLOR.normal },
+    { label: "HARD", achieved: gradeByType.hard !== undefined && gradeByType.hard !== "FAILED", color: GAUGE_ACHIEVED_COLOR.hard },
+    {
+      label: "CHALLENGE",
+      achieved: gradeByType.challenge !== undefined && gradeByType.challenge !== "FAILED",
+      color: GAUGE_ACHIEVED_COLOR.challenge,
+    },
+    { label: "FULL COMBO", achieved: achievedFullCombo, color: CLEAR_GRADE_COLOR.FULL_COMBO },
+    { label: "PERFECT", achieved: achievedPerfect, color: CLEAR_GRADE_COLOR.PERFECT },
+  ];
+
+  songPopupClearTags.innerHTML = tags
+    .map((tag) => {
+      const style = tag.achieved ? ` style="color:${tag.color};border-color:${tag.color}"` : "";
+      return `<span class="clear-tag${tag.achieved ? " achieved" : ""}"${style}>${tag.label}</span>`;
+    })
+    .join("");
+}
+
 function openSongPopup(songId: string): void {
   selectedSongId = songId;
   const song = findSong(songId);
@@ -1135,6 +1206,7 @@ function openSongPopup(songId: string): void {
   songPopupTitle.textContent = song.title;
   songPopupArtist.textContent = song.artist;
   renderPopupDifficultyButtons(song);
+  renderSongPopupStatus(song);
   updateMirrorToggleLabel();
   songPopup.classList.add("open");
   renderSongList(); // 리스트 쪽 강조 표시(선택된 곡의 선택된 난이도)를 갱신
@@ -1164,6 +1236,7 @@ songPopupDifficultyEl.addEventListener("click", (event) => {
   if (btn === null || selectedSongId === null) return;
   selectedDifficulty = btn.dataset.difficulty as Difficulty;
   renderPopupDifficultyButtons(findSong(selectedSongId));
+  renderSongPopupStatus(findSong(selectedSongId));
   renderSongList(); // 리스트 쪽 강조도 같이 갱신
 });
 
@@ -1208,7 +1281,7 @@ songPopupStartBtn.addEventListener("click", async () => {
   await startPlay();
 
   songPopupStartBtn.disabled = false;
-  songPopupStartBtn.textContent = "곡 시작";
+  songPopupStartBtn.textContent = "START";
 });
 
 function goToSongSelect(): void {

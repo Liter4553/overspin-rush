@@ -311,22 +311,26 @@ h1 {
   color: #8b93a7;
 }
 
-/* 난이도를 세로로 쌓는 대신 가로로 나열된 블록 3개로 표시 (오른쪽 끝에 꽉 차게) */
+/* 난이도를 세로로 쌓는 대신 가로로 나열된 블록 3개로 표시 (오른쪽 끝에 꽉 차게).
+   align-items를 center로 두면 level-block이 기본 stretch를 잃고 내용물 높이로
+   줄어드는 버그가 있었다 — stretch(기본값)를 유지하고 마크만 따로 세로 중앙 정렬한다. */
 .song-item-levels {
   flex: none;
   display: flex;
   flex-direction: row;
-  align-items: center;
 }
 
-/* EASY 블록 왼쪽 여백에 놓는 클리어 마크 하나(선택된 난이도의 최고 기록 대표 표시). */
+/* EASY 블록 왼쪽 여백에 놓는 클리어 마크 하나(선택된 난이도의 최고 기록 대표 표시).
+   난이도 라벨(.level-block-label)과 같은 크기로 표기한다. */
 .song-item-clear-mark {
   display: inline-flex;
+  align-self: center;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  font-size: 0.75rem;
-  font-weight: 800;
+  width: 24px;
+  font-size: 0.78rem;
+  font-weight: bold;
+  letter-spacing: 0.03em;
   font-family: "Consolas", monospace;
 }
 
@@ -438,6 +442,45 @@ h1 {
 .song-popup-artist {
   font-size: 1rem;
   color: #8b93a7;
+}
+
+.song-popup-status {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.song-popup-hiscore {
+  font-size: 0.85rem;
+  color: #8b93a7;
+  font-family: "Consolas", monospace;
+  letter-spacing: 0.05em;
+}
+
+.song-popup-hiscore span {
+  color: #e8eaf0;
+  font-weight: bold;
+}
+
+.song-popup-clear-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.clear-tag {
+  padding: 2px 7px;
+  border: 1px solid #2a2c38;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: bold;
+  letter-spacing: 0.02em;
+  color: #4a4f5c;
+  font-family: "Consolas", monospace;
+}
+
+.clear-tag.achieved {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .difficulty-buttons {
@@ -742,13 +785,6 @@ h1 {
   font-size: 1.3rem;
   font-weight: 700;
   letter-spacing: 0.15em;
-}
-
-.clear-grade-gauge {
-  margin-top: -14px;
-  font-size: 0.85rem;
-  color: #8b93a7;
-  font-family: "Consolas", monospace;
 }
 
 .results-summary {
