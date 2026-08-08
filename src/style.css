@@ -446,11 +446,13 @@ h1 {
   min-width: 0;
 }
 
-/* 지금 선택된 난이도의 최고 클리어 등급 하나만 크게 표시(선곡 리스트와 같은 방식) */
+/* 지금 선택된 난이도의 최고 클리어 등급 하나만 풀네임으로 표시(선곡 리스트는 약자, 여기는 전체 단어).
+   "FULL COMBO"처럼 긴 단어도 들어가므로 선곡 리스트의 약자(1.7rem)보다는 작게 잡는다. */
 .song-popup-clear-mark {
   flex: none;
-  font-size: 1.7rem;
+  font-size: 1.05rem;
   font-weight: 800;
+  letter-spacing: 0.03em;
   font-family: "Consolas", monospace;
 }
 

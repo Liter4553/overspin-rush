@@ -1180,7 +1180,7 @@ function renderSongPopupStatus(song: SongEntry): void {
     songPopupClearMark.textContent = "";
     songPopupClearMark.style.color = "";
   } else {
-    songPopupClearMark.textContent = CLEAR_GRADE_BADGE_TEXT[bestGrade];
+    songPopupClearMark.textContent = CLEAR_GRADE_LABEL[bestGrade]; // 선곡 리스트와 달리 팝업은 풀네임으로 표기
     songPopupClearMark.style.color = CLEAR_GRADE_COLOR[bestGrade];
   }
 }
