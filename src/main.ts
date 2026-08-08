@@ -14,6 +14,13 @@ import { advanceHoldTicks, computeTickIntervalMs, startActiveHold, type ActiveHo
 import { clampSpeed, greenNumberMsToSpeed, speedToGreenNumberMs } from "./core/speedOptions";
 import { applyArrangement, type Arrangement } from "./core/laneArrangement";
 import {
+  applyGaugePlayHoldTick,
+  applyGaugePlayJudgement,
+  computeGaugeCoefficient,
+  createGaugePlayState,
+  type GaugePlayState,
+} from "./core/gauge";
+import {
   clampPresetIndex,
   createDefaultSnapshot,
   parseActivePresetIndex,
@@ -30,7 +37,7 @@ import {
   createScratchDirectionState,
 } from "./core/scratchInput";
 import { chartDurationMs, isChartComplete } from "./core/chartCompletion";
-import { computeResults, type GradeTimingBreakdown } from "./core/results";
+import { computeResults, countJudgeableNotes, type GradeTimingBreakdown } from "./core/results";
 import { computeFitScale } from "./render/viewportScale";
 import { DIFFICULTIES, DIFFICULTY_LABEL, SONG_LIST, type Difficulty, type SongEntry } from "./chart/songList";
 import type { Chart, NoteLane } from "./chart/types";
@@ -410,6 +417,11 @@ let audioOffsetMs = AUDIO_OFFSET_MS;
 let inputOffsetMs = INPUT_OFFSET_MS;
 let activeNoteColors: NoteColors = NOTE_SKIN_PALETTES[0];
 let scratchThresholdPx = SCRATCH_THRESHOLD;
+let activeGaugeType: GaugeType = DEFAULT_GAUGE_TYPE;
+let gasEnabled = false;
+// 채보 로드 시 1회 산출되는 NORMAL 계수(a)와 현재 게이지 상태. startPlay에서 초기화된다.
+let gaugeCoefficientA = 0;
+let gaugePlayState: GaugePlayState = createGaugePlayState(DEFAULT_GAUGE_TYPE, false);
 
 function updateSpeedDisplay(): void {
   const speed = greenNumberMsToSpeed(effectiveGreenNumberMs, BASE_GREEN_NUMBER_MS);
@@ -503,6 +515,7 @@ function judgeAndApply(lane: NoteLane, inputTimeMs: number, source: TickSource):
 
   markJudged(found, result.grade, errorMs);
   gameState = applyJudgement(gameState, result.grade, result.score, sign);
+  gaugePlayState = applyGaugePlayJudgement(gaugePlayState, result.grade, gaugeCoefficientA);
 
   // 홀드는 시작 판정 1회뿐(SPEC.md 3절) — 이후 누르고 있는 동안의 틱은 여기서 활성화만
   // 등록해두고, 실제 발생은 renderLoop가 매 프레임 audioClock 시각으로 계산한다.
@@ -672,6 +685,7 @@ function processHoldTicks(currentTimeMs: number): void {
     if (tickCount > 0) {
       for (let i = 0; i < tickCount; i++) {
         gameState = applyHoldTick(gameState);
+        gaugePlayState = applyGaugePlayHoldTick(gaugePlayState, true, gaugeCoefficientA);
       }
       activeHolds.set(lane, nextHold);
       updateHud();
@@ -690,6 +704,7 @@ function renderLoop(): void {
   if (newlyMissed.length > 0) {
     newlyMissed.forEach(() => {
       gameState = applyJudgement(gameState, "MISS", 0, null);
+      gaugePlayState = applyGaugePlayJudgement(gaugePlayState, "MISS", gaugeCoefficientA);
     });
     latestJudgment = { grade: "MISS", sign: null, shownAtMs: currentTimeMs };
     updateHud();
@@ -729,6 +744,8 @@ async function startPlay(): Promise<void> {
   songDurationMs = chartDurationMs(activeChart, AUTO_MISS_WINDOW_MS);
   noteTracker = createNoteTracker(activeChart);
   gameState = createGameState();
+  gaugeCoefficientA = computeGaugeCoefficient(countJudgeableNotes(activeChart));
+  gaugePlayState = createGaugePlayState(activeGaugeType, gasEnabled);
   judgmentTicks = [];
   latestJudgment = null;
   scratchAccumulator = createScratchAccumulator();
@@ -879,8 +896,9 @@ function applyOptionsFromInputs(): void {
     SCRATCH_THRESHOLD_MAX,
     Math.max(SCRATCH_THRESHOLD_MIN, Number(optionScratchThresholdInput.value) || SCRATCH_THRESHOLD),
   );
-  // 게이지 타입/GAS는 옵션 화면과 프리셋에만 지금 연결한다. 실제 게임 로직 연결은
-  // 3단계(게임플레이 연결)에서 activeGaugeType/gasEnabled 런타임 상태로 이어진다.
+
+  activeGaugeType = optionGaugeTypeSelect.value as GaugeType;
+  gasEnabled = optionGasEnabledCheckbox.checked;
 }
 
 function openOptionsOverlay(): void {

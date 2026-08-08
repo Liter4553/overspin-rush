@@ -4,10 +4,15 @@ import {
   applyBackupGaugeRelayJudgement,
   applyGaugeHoldTick,
   applyGaugeJudgement,
+  applyGaugePlayHoldTick,
+  applyGaugePlayJudgement,
   computeGaugeCoefficient,
   createBackupGaugeRelay,
+  createGaugePlayState,
   createGaugeState,
+  currentGauge,
   isCleared,
+  wasRelayed,
 } from "./gauge";
 
 function applyMisses(type: "hard" | "challenge", count: number) {
@@ -181,5 +186,43 @@ describe("BackupGaugeRelay (GAS)", () => {
     for (let i = 0; i < 50; i++) applyOne("MISS");
     expect(relay.primary.dead).toBe(false);
     expect(relay.primary.value).toBe(0);
+  });
+});
+
+describe("GaugePlayState (single/relay 통합 래퍼)", () => {
+  it("GAS가 꺼져 있으면 HARD/CHALLENGE도 단일 게이지로 동작한다", () => {
+    let state = createGaugePlayState("hard", false);
+    expect(state.mode).toBe("single");
+    state = applyGaugePlayJudgement(state, "MISS", 0);
+    expect(currentGauge(state).value).toBeCloseTo(91, 5);
+    expect(wasRelayed(state)).toBe(false);
+  });
+
+  it("NORMAL은 GAS 옵션과 무관하게 항상 단일 게이지다", () => {
+    const state = createGaugePlayState("normal", true);
+    expect(state.mode).toBe("single");
+  });
+
+  it("GAS가 켜진 HARD/CHALLENGE는 relay 모드로 시작하고, 폭사 시 표면이 승계·전환된다", () => {
+    const a = computeGaugeCoefficient(20);
+    let state = createGaugePlayState("hard", true);
+    expect(state.mode).toBe("relay");
+
+    for (let i = 0; i < 30 && !wasRelayed(state); i++) {
+      state = applyGaugePlayJudgement(state, "MISS", a);
+    }
+
+    expect(wasRelayed(state)).toBe(true);
+    expect(currentGauge(state).type).toBe("normal");
+    expect(currentGauge(state).dead).toBe(false);
+  });
+
+  it("applyGaugePlayHoldTick도 single/relay 양쪽에서 잔량을 반영한다", () => {
+    const a = computeGaugeCoefficient(1000);
+    const single = applyGaugePlayHoldTick(createGaugePlayState("normal", false), true, a);
+    expect(currentGauge(single).value).toBeCloseTo(a * 0.5, 5);
+
+    const relay = applyGaugePlayHoldTick(createGaugePlayState("hard", true), true, a);
+    expect(currentGauge(relay).value).toBeCloseTo(100, 5); // 클램프 상한
   });
 });

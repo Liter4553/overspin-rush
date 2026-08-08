@@ -178,3 +178,47 @@ export function applyBackupGaugeRelayHoldTick(
   const nextBackup = state.backup === null ? null : applyGaugeHoldTick(state.backup, held, coefficientA);
   return relayAfterPrimaryUpdate(nextPrimary, nextBackup);
 }
+
+// --- 플레이 진행용 통합 상태 ---
+// 게임플레이 쪽(main.ts)은 GAS 켜짐 여부에 따라 단일 게이지와 GAS 릴레이 중 무엇을
+// 굴리고 있는지 신경 쓰지 않고 이 타입 하나만 다루면 되도록 감싼다.
+export type GaugePlayState =
+  | { readonly mode: "single"; readonly gauge: GaugeState }
+  | { readonly mode: "relay"; readonly relay: BackupGaugeRelayState };
+
+export function createGaugePlayState(type: GaugeType, gasEnabled: boolean): GaugePlayState {
+  if (gasEnabled && (type === "hard" || type === "challenge")) {
+    return { mode: "relay", relay: createBackupGaugeRelay(type) };
+  }
+  return { mode: "single", gauge: createGaugeState(type) };
+}
+
+export function applyGaugePlayJudgement(
+  state: GaugePlayState,
+  grade: JudgeGrade,
+  coefficientA: number,
+): GaugePlayState {
+  return state.mode === "relay"
+    ? { mode: "relay", relay: applyBackupGaugeRelayJudgement(state.relay, grade, coefficientA) }
+    : { mode: "single", gauge: applyGaugeJudgement(state.gauge, grade, coefficientA) };
+}
+
+export function applyGaugePlayHoldTick(
+  state: GaugePlayState,
+  held: boolean,
+  coefficientA: number,
+): GaugePlayState {
+  return state.mode === "relay"
+    ? { mode: "relay", relay: applyBackupGaugeRelayHoldTick(state.relay, held, coefficientA) }
+    : { mode: "single", gauge: applyGaugeHoldTick(state.gauge, held, coefficientA) };
+}
+
+// 지금 화면에 보여줘야 할 게이지(단일이면 그대로, GAS면 표면 게이지).
+export function currentGauge(state: GaugePlayState): GaugeState {
+  return state.mode === "relay" ? state.relay.primary : state.gauge;
+}
+
+// GAS가 방금 전환됐는지(연출 트리거용).
+export function wasRelayed(state: GaugePlayState): boolean {
+  return state.mode === "relay" && state.relay.relayed;
+}

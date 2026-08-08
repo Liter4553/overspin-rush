@@ -53,7 +53,7 @@ export function computeGradeTimingBreakdown(tracker: readonly TrackedNote[]): Gr
   return { centerCount, fastCounts, slowCounts };
 }
 
-function countJudgeableNotes(chart: Chart): number {
+export function countJudgeableNotes(chart: Chart): number {
   return chart.notes.filter((note) => JUDGEABLE_LANES.includes(note.lane)).length;
 }
 
