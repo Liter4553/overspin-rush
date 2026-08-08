@@ -151,7 +151,10 @@ app.innerHTML = `
           <div class="difficulty-buttons" id="song-popup-difficulty"></div>
           <div class="song-popup-footer-row">
             <button type="button" id="song-popup-mirror-toggle" class="mirror-toggle"></button>
-            <span class="song-popup-hiscore-value" id="song-popup-hiscore-value">0</span>
+            <div class="song-popup-score-col">
+              <span class="song-popup-accuracy-value" id="song-popup-accuracy-value">0.00%</span>
+              <span class="song-popup-hiscore-value" id="song-popup-hiscore-value">0</span>
+            </div>
           </div>
         </div>
         <button id="song-popup-start-btn">START</button>
@@ -321,6 +324,7 @@ const songPopupJacket = document.querySelector<HTMLDivElement>("#song-popup-jack
 const songPopupTitle = document.querySelector<HTMLDivElement>("#song-popup-title")!;
 const songPopupArtist = document.querySelector<HTMLDivElement>("#song-popup-artist")!;
 const songPopupHiScoreValue = document.querySelector<HTMLSpanElement>("#song-popup-hiscore-value")!;
+const songPopupAccuracyValue = document.querySelector<HTMLSpanElement>("#song-popup-accuracy-value")!;
 const songPopupClearMark = document.querySelector<HTMLSpanElement>("#song-popup-clear-mark")!;
 const songPopupDifficultyEl = document.querySelector<HTMLDivElement>("#song-popup-difficulty")!;
 const songPopupMirrorToggle = document.querySelector<HTMLButtonElement>("#song-popup-mirror-toggle")!;
@@ -1162,7 +1166,14 @@ songPopupMirrorToggle.addEventListener("click", () => {
 // 팝업의 HI-SCORE(숫자만)와 클리어 마크를 지금 선택된 난이도 기준으로 갱신한다.
 // 클리어 마크는 선곡 리스트와 동일하게, 게이지 타입 3개 중 가장 좋은 등급 하나만 보여준다.
 function renderSongPopupStatus(song: SongEntry): void {
-  songPopupHiScoreValue.textContent = String(highScores[highScoreKey(song.id, selectedDifficulty)] ?? 0);
+  const highScore = highScores[highScoreKey(song.id, selectedDifficulty)] ?? 0;
+  songPopupHiScoreValue.textContent = String(highScore);
+
+  // 정확도는 results.ts의 accuracyPercent와 같은 공식(score / 이론치 * 100)을 그대로
+  // 재사용한다 — 별도로 저장하지 않아도 점수와 채보(이론치)만으로 그대로 복원된다.
+  const theoreticalMax = countJudgeableNotes(parseChart(song.chartRaw)) * 4;
+  const accuracyPercent = theoreticalMax === 0 ? 0 : (highScore / theoreticalMax) * 100;
+  songPopupAccuracyValue.textContent = `${accuracyPercent.toFixed(2)}%`;
 
   const bestGrade = bestGradeForSong(clearRecords, song.id, selectedDifficulty, ALL_GAUGE_TYPES);
   if (bestGrade === null) {

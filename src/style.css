@@ -466,6 +466,19 @@ h1 {
   gap: 12px;
 }
 
+.song-popup-score-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.song-popup-accuracy-value {
+  font-size: 0.85rem;
+  color: #8b93a7;
+  font-family: "Consolas", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
 /* 부제("HI-SCORE") 없이 숫자만 — 미러 토글 옆 남는 공간을 채우도록 크게 표시 */
 .song-popup-hiscore-value {
   font-size: 1.9rem;
