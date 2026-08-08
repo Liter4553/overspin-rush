@@ -236,3 +236,6 @@ export const DEFAULT_GAUGE_TYPE: GaugeType = "normal";
 
 // HARD/CHALLENGE 폭사 시 레인 위에서 내려오는 FAILED 셔터 연출 시간(ms). CSS 애니메이션과 일치해야 한다.
 export const FAIL_SHUTTER_DROP_MS = 700;
+
+// 곡+난이도+게이지타입별 최고 클리어 등급 기록 저장 키.
+export const CLEAR_RECORDS_STORAGE_KEY = "overspin-rush:clearRecords";

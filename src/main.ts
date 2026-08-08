@@ -22,6 +22,15 @@ import {
   type GaugePlayState,
   wasRelayed,
 } from "./core/gauge";
+import { computeClearGrade, type ClearGrade } from "./core/clearGrade";
+import {
+  bestGradeForSong,
+  clearRecordKey,
+  parseClearRecords,
+  serializeClearRecords,
+  upsertBestGrade,
+  type ClearRecords,
+} from "./core/clearRecords";
 import {
   clampPresetIndex,
   createDefaultSnapshot,
@@ -55,6 +64,7 @@ import {
   DEFAULT_GAUGE_TYPE,
   DEFAULT_KEYMAP,
   DEFAULT_NOTE_SKIN_ID,
+  CLEAR_RECORDS_STORAGE_KEY,
   DEFAULT_SCRATCH_SIDE,
   FAIL_SHUTTER_DROP_MS,
   GAUGE_TYPE_CONFIG,
@@ -256,6 +266,7 @@ app.innerHTML = `
 
   <div class="results-panel" id="results-panel" hidden>
     <h2>RESULT</h2>
+    <div class="clear-grade-badge" id="clear-grade-badge"></div>
     <div class="results-summary">
       <div class="summary-stat"><span class="summary-label">SCORE</span><span class="summary-value" id="result-score">0</span></div>
       <div class="summary-stat"><span class="summary-label">이론치</span><span class="summary-value" id="result-theoretical">0</span></div>
@@ -321,6 +332,7 @@ const failShutter = document.querySelector<HTMLDivElement>("#fail-shutter")!;
 const pauseCountdown = document.querySelector<HTMLDivElement>("#pause-countdown")!;
 const resumeBtn = document.querySelector<HTMLButtonElement>("#resume-btn")!;
 const resultsPanel = document.querySelector<HTMLDivElement>("#results-panel")!;
+const clearGradeBadge = document.querySelector<HTMLDivElement>("#clear-grade-badge")!;
 const resultGradePanel = document.querySelector<HTMLDivElement>("#result-grade-panel")!;
 const resultTimingChart = document.querySelector<HTMLDivElement>("#result-timing-chart")!;
 const restartBtn = document.querySelector<HTMLButtonElement>("#restart-btn")!;
@@ -442,6 +454,8 @@ let gasEnabled = false;
 // 채보 로드 시 1회 산출되는 NORMAL 계수(a)와 현재 게이지 상태. startPlay에서 초기화된다.
 let gaugeCoefficientA = 0;
 let gaugePlayState: GaugePlayState = createGaugePlayState(DEFAULT_GAUGE_TYPE, false);
+const ALL_GAUGE_TYPES = Object.keys(GAUGE_TYPE_CONFIG) as GaugeType[];
+let clearRecords: ClearRecords = parseClearRecords(localStorage.getItem(CLEAR_RECORDS_STORAGE_KEY));
 
 function updateSpeedDisplay(): void {
   const speed = greenNumberMsToSpeed(effectiveGreenNumberMs, BASE_GREEN_NUMBER_MS);
@@ -520,6 +534,35 @@ function renderTimingChart(breakdown: GradeTimingBreakdown): void {
     .join("");
 }
 
+const CLEAR_GRADE_LABEL: Readonly<Record<ClearGrade, string>> = {
+  FAILED: "FAILED",
+  CLEAR: "CLEAR",
+  HARD_CLEAR: "HARD CLEAR",
+  CHALLENGE_CLEAR: "CHALLENGE CLEAR",
+  FULL_COMBO: "FULL COMBO",
+  PERFECT: "PERFECT",
+};
+
+const CLEAR_GRADE_COLOR: Readonly<Record<ClearGrade, string>> = {
+  FAILED: "#EF4444",
+  CLEAR: "#7DD3FC",
+  HARD_CLEAR: "#F87171",
+  CHALLENGE_CLEAR: "#C084FC",
+  FULL_COMBO: "#4ADE80",
+  PERFECT: "#FAC775",
+};
+
+// 선곡 리스트 난이도 블록은 좁아서 등급 전체를 못 적는다 — 짧은 약자로 표시.
+// HARD_CLEAR/CHALLENGE_CLEAR도 "클리어했다"는 사실만 대표로 보여주면 되므로 CLEAR와 같은 표기를 쓴다.
+const CLEAR_GRADE_BADGE_TEXT: Readonly<Record<ClearGrade, string>> = {
+  FAILED: "F",
+  CLEAR: "C",
+  HARD_CLEAR: "C",
+  CHALLENGE_CLEAR: "C",
+  FULL_COMBO: "FC",
+  PERFECT: "P",
+};
+
 // HARD/CHALLENGE 게이지가 폭사(dead)했을 때만 호출된다(GAS로 구제되면 dead가 절대 true가
 // 되지 않는다 — gauge.ts의 relay 전환 로직 참고). 셔터가 다 내려온 뒤 결과 화면으로 넘어간다.
 function triggerFailure(): void {
@@ -538,6 +581,22 @@ function triggerFailure(): void {
 function showResults(): void {
   phase = "results";
   const summary = computeResults(activeChart, gameState, noteTracker);
+
+  const finalGauge = currentGauge(gaugePlayState);
+  const clearGrade = computeClearGrade(activeChart, gameState, finalGauge);
+  clearGradeBadge.textContent = CLEAR_GRADE_LABEL[clearGrade];
+  clearGradeBadge.style.color = CLEAR_GRADE_COLOR[clearGrade];
+
+  // 기록은 실제로 굴린 게이지 타입(activeGaugeType)을 기준으로 저장한다 — GAS로 전환됐다면
+  // finalGauge.type은 이미 "normal"이지만, 플레이어가 시도한 모드는 여전히 HARD/CHALLENGE다.
+  if (selectedSongId !== null) {
+    clearRecords = upsertBestGrade(
+      clearRecords,
+      clearRecordKey(selectedSongId, selectedDifficulty, activeGaugeType),
+      clearGrade,
+    );
+    localStorage.setItem(CLEAR_RECORDS_STORAGE_KEY, serializeClearRecords(clearRecords));
+  }
 
   document.querySelector("#result-score")!.textContent = String(summary.score);
   document.querySelector("#result-theoretical")!.textContent = String(summary.theoreticalMax);
@@ -1024,10 +1083,14 @@ function renderSongList(): void {
           <div class="song-item-artist">${song.artist}</div>
         </div>
         <div class="song-item-levels">
-          ${DIFFICULTIES.map(
-            (d) =>
-              `<div class="level-block level-${d}${isActiveLevelBlock(song.id, d) ? " active" : ""}" data-difficulty="${d}"><span class="level-block-label">${DIFFICULTY_LABEL[d]}</span><span class="level-block-value">${song.levels[d]}</span></div>`,
-          ).join("")}
+          ${DIFFICULTIES.map((d) => {
+            const bestGrade = bestGradeForSong(clearRecords, song.id, d, ALL_GAUGE_TYPES);
+            const badge =
+              bestGrade === null
+                ? ""
+                : `<span class="level-block-clear" style="color:${CLEAR_GRADE_COLOR[bestGrade]}">${CLEAR_GRADE_BADGE_TEXT[bestGrade]}</span>`;
+            return `<div class="level-block level-${d}${isActiveLevelBlock(song.id, d) ? " active" : ""}" data-difficulty="${d}"><span class="level-block-label">${DIFFICULTY_LABEL[d]}</span><span class="level-block-value">${song.levels[d]}</span>${badge}</div>`;
+          }).join("")}
         </div>
       </button>`,
   ).join("");

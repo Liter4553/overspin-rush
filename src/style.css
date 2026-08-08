@@ -312,6 +312,7 @@ h1 {
 
 /* 1:1보다 좁은(세로가 더 긴) 직사각형 — width만 줄이고 높이는 song-item에 맞춰 stretch. */
 .level-block {
+  position: relative;
   width: 54px;
   display: flex;
   flex-direction: column;
@@ -319,6 +320,19 @@ h1 {
   justify-content: center;
   gap: 3px;
   cursor: pointer;
+}
+
+.level-block-clear {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.4);
+  font-family: "Consolas", monospace;
 }
 
 .level-block-label {
@@ -715,6 +729,13 @@ h1 {
   margin: 0;
   letter-spacing: 0.15em;
   color: #7dd3fc;
+}
+
+.clear-grade-badge {
+  margin-top: -8px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
 }
 
 .results-summary {
