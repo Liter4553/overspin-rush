@@ -6,7 +6,9 @@ import {
   BASE_GREEN_NUMBER_MS,
   type CanvasWidthOption,
   DEFAULT_CANVAS_WIDTH_OPTION,
+  DEFAULT_GAUGE_TYPE,
   DEFAULT_NOTE_SKIN_ID,
+  type GaugeType,
   INPUT_OFFSET_MS,
   JUDGE_LINE_MARGIN_BOTTOM,
   PRESET_COUNT,
@@ -22,6 +24,8 @@ export interface OptionsSnapshot {
   judgeLineMarginBottom: number;
   noteSkinId: string;
   scratchThreshold: number;
+  gaugeType: GaugeType;
+  gasEnabled: boolean;
 }
 
 export function createDefaultSnapshot(): OptionsSnapshot {
@@ -34,6 +38,8 @@ export function createDefaultSnapshot(): OptionsSnapshot {
     judgeLineMarginBottom: JUDGE_LINE_MARGIN_BOTTOM,
     noteSkinId: DEFAULT_NOTE_SKIN_ID,
     scratchThreshold: SCRATCH_THRESHOLD,
+    gaugeType: DEFAULT_GAUGE_TYPE,
+    gasEnabled: false,
   };
 }
 
@@ -55,7 +61,9 @@ function isValidSnapshot(value: unknown): value is OptionsSnapshot {
     typeof v.inputOffsetMs === "number" &&
     typeof v.judgeLineMarginBottom === "number" &&
     typeof v.noteSkinId === "string" &&
-    typeof v.scratchThreshold === "number"
+    typeof v.scratchThreshold === "number" &&
+    (v.gaugeType === "normal" || v.gaugeType === "hard" || v.gaugeType === "challenge") &&
+    typeof v.gasEnabled === "boolean"
   );
 }
 

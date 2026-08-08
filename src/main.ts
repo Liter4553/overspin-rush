@@ -43,9 +43,12 @@ import {
   type CanvasWidthOption,
   CANVAS_WIDTH_OPTIONS,
   DEFAULT_CANVAS_WIDTH_OPTION,
+  DEFAULT_GAUGE_TYPE,
   DEFAULT_KEYMAP,
   DEFAULT_NOTE_SKIN_ID,
   DEFAULT_SCRATCH_SIDE,
+  GAUGE_TYPE_CONFIG,
+  type GaugeType,
   GREEN_NUMBER_MAX_MS,
   GREEN_NUMBER_MIN_MS,
   INPUT_OFFSET_MS,
@@ -175,9 +178,25 @@ app.innerHTML = `
         ).join("")}
       </select>
     </div>
+    <div class="option-row">
+      <label for="option-gauge-type">게이지</label>
+      <select id="option-gauge-type">
+        ${(Object.keys(GAUGE_TYPE_CONFIG) as GaugeType[])
+          .map(
+            (id) =>
+              `<option value="${id}"${id === DEFAULT_GAUGE_TYPE ? " selected" : ""}>${GAUGE_TYPE_CONFIG[id].label}</option>`,
+          )
+          .join("")}
+      </select>
+    </div>
+    <div class="option-row gas-row" id="option-gas-row" hidden>
+      <label for="option-gas-enabled">GAS <span class="info-icon" id="gas-info-icon">\u{1F6C8}</span></label>
+      <input type="checkbox" id="option-gas-enabled" />
+    </div>
     <button type="button" id="options-close-btn">닫기</button>
   </div>
   </div>
+  <div class="info-tooltip" id="gas-info-tooltip" hidden></div>
 
   <div id="gameplay-view" hidden>
     <div class="clock-panel">
@@ -261,6 +280,11 @@ const optionInputOffsetInput = document.querySelector<HTMLInputElement>("#option
 const optionJudgeLineInput = document.querySelector<HTMLInputElement>("#option-judge-line")!;
 const optionScratchThresholdInput = document.querySelector<HTMLInputElement>("#option-scratch-threshold")!;
 const optionNoteSkinSelect = document.querySelector<HTMLSelectElement>("#option-note-skin")!;
+const optionGaugeTypeSelect = document.querySelector<HTMLSelectElement>("#option-gauge-type")!;
+const optionGasRow = document.querySelector<HTMLDivElement>("#option-gas-row")!;
+const optionGasEnabledCheckbox = document.querySelector<HTMLInputElement>("#option-gas-enabled")!;
+const gasInfoIcon = document.querySelector<HTMLSpanElement>("#gas-info-icon")!;
+const gasInfoTooltip = document.querySelector<HTMLDivElement>("#gas-info-tooltip")!;
 const presetButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".preset-btn"));
 const optionSavePresetBtn = document.querySelector<HTMLButtonElement>("#option-save-preset")!;
 const optionsCloseBtn = document.querySelector<HTMLButtonElement>("#options-close-btn")!;
@@ -745,6 +769,30 @@ function syncGreenNumberFromInput(): void {
 optionSpeedInput.addEventListener("change", syncSpeedFromInput);
 optionGreenNumberInput.addEventListener("change", syncGreenNumberFromInput);
 
+// GAS는 서바이벌형(HARD/CHALLENGE)에서만 의미가 있다. NORMAL을 고르면 숨긴다.
+function updateGasRowVisibility(): void {
+  const gaugeType = optionGaugeTypeSelect.value as GaugeType;
+  optionGasRow.hidden = !GAUGE_TYPE_CONFIG[gaugeType].survival;
+}
+optionGaugeTypeSelect.addEventListener("change", updateGasRowVisibility);
+updateGasRowVisibility();
+
+const GAS_TOOLTIP_TEXT =
+  "Gauge Assist System — 표면 게이지가 0%가 되어도 곧바로 중단되지 않고, 병행 계산 중인 NORMAL 게이지 잔량을 이어받아 계속 진행합니다.";
+gasInfoTooltip.textContent = GAS_TOOLTIP_TEXT;
+
+// 팝업 위치는 마우스 커서에 종속 — 아이콘 위에서 움직이는 동안 계속 따라간다.
+gasInfoIcon.addEventListener("mouseenter", () => {
+  gasInfoTooltip.hidden = false;
+});
+gasInfoIcon.addEventListener("mousemove", (event) => {
+  gasInfoTooltip.style.left = `${event.clientX + 14}px`;
+  gasInfoTooltip.style.top = `${event.clientY + 14}px`;
+});
+gasInfoIcon.addEventListener("mouseleave", () => {
+  gasInfoTooltip.hidden = true;
+});
+
 // 프리셋 3개. 슬롯이 비어있으면(한 번도 저장 안 함) null — 이때는 기본값을 보여준다.
 let presetSlots: PresetSlots = parsePresets(localStorage.getItem(PRESET_STORAGE_KEY));
 let activePresetIndex = parseActivePresetIndex(localStorage.getItem(ACTIVE_PRESET_STORAGE_KEY));
@@ -759,6 +807,8 @@ function readOptionsSnapshot(): OptionsSnapshot {
     judgeLineMarginBottom: Number(optionJudgeLineInput.value) || JUDGE_LINE_MARGIN_BOTTOM,
     noteSkinId: optionNoteSkinSelect.value,
     scratchThreshold: Number(optionScratchThresholdInput.value) || SCRATCH_THRESHOLD,
+    gaugeType: optionGaugeTypeSelect.value as GaugeType,
+    gasEnabled: optionGasEnabledCheckbox.checked,
   };
 }
 
@@ -772,6 +822,9 @@ function applySnapshotToInputs(snapshot: OptionsSnapshot): void {
   optionJudgeLineInput.value = String(snapshot.judgeLineMarginBottom);
   optionNoteSkinSelect.value = snapshot.noteSkinId;
   optionScratchThresholdInput.value = String(snapshot.scratchThreshold);
+  optionGaugeTypeSelect.value = snapshot.gaugeType;
+  optionGasEnabledCheckbox.checked = snapshot.gasEnabled;
+  updateGasRowVisibility();
 }
 
 function highlightActivePreset(): void {
@@ -826,6 +879,8 @@ function applyOptionsFromInputs(): void {
     SCRATCH_THRESHOLD_MAX,
     Math.max(SCRATCH_THRESHOLD_MIN, Number(optionScratchThresholdInput.value) || SCRATCH_THRESHOLD),
   );
+  // 게이지 타입/GAS는 옵션 화면과 프리셋에만 지금 연결한다. 실제 게임 로직 연결은
+  // 3단계(게임플레이 연결)에서 activeGaugeType/gasEnabled 런타임 상태로 이어진다.
 }
 
 function openOptionsOverlay(): void {

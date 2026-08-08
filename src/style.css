@@ -163,6 +163,44 @@ h1 {
   background: #7dd3fc22;
 }
 
+.gas-row[hidden] {
+  display: none;
+}
+
+.gas-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.info-icon {
+  cursor: help;
+  color: #7dd3fc;
+  font-size: 0.9rem;
+}
+
+.info-tooltip {
+  position: fixed;
+  z-index: 20;
+  max-width: 260px;
+  padding: 10px 12px;
+  border: 1px solid #2a2c38;
+  border-radius: 6px;
+  background: #0e0f14;
+  color: #e8eaf0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.info-tooltip[hidden] {
+  display: none;
+}
+
+.option-row input[type="checkbox"] {
+  width: auto;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
