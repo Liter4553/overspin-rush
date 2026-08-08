@@ -272,39 +272,58 @@ h1 {
   flex-direction: row;
 }
 
+/* 1:1보다 좁은(세로가 더 긴) 직사각형 — width만 줄이고 높이는 song-item에 맞춰 stretch. */
 .level-block {
-  width: 70px;
+  width: 54px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
+  cursor: pointer;
 }
 
 .level-block-label {
-  font-size: 0.65rem;
+  font-size: 0.78rem;
   font-weight: bold;
   letter-spacing: 0.03em;
   font-family: "Consolas", monospace;
 }
 
 .level-block-value {
-  font-size: 1.2rem;
+  font-size: 1.4rem;
   font-weight: bold;
   font-family: "Consolas", monospace;
 }
 
+/* 기본 상태는 채도를 낮춰(50% 불투명) 튀지 않게 하고, 선택된 곡의 선택된 난이도만
+   .active로 완전 불투명 + 진한 색을 줘서 나머지와 확실히 구분되게 한다. */
 .level-easy {
+  background: #4fc3f780;
+  color: #4fc3f7;
+}
+
+.level-normal {
+  background: #ffd43b80;
+  color: #ffd43b;
+}
+
+.level-hard {
+  background: #fa525280;
+  color: #fa5252;
+}
+
+.level-block.active.level-easy {
   background: #4fc3f7;
   color: #0b0d12;
 }
 
-.level-normal {
+.level-block.active.level-normal {
   background: #ffd43b;
   color: #0b0d12;
 }
 
-.level-hard {
+.level-block.active.level-hard {
   background: #fa5252;
   color: #0b0d12;
 }

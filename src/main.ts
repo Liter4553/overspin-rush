@@ -828,6 +828,11 @@ function jacketGradient(song: SongEntry): string {
   return `linear-gradient(135deg, ${song.jacketColors[0]}, ${song.jacketColors[1]})`;
 }
 
+// 지금 팝업이 열려 있는 곡의, 지금 선택된 난이도 블록만 진하게 강조한다.
+function isActiveLevelBlock(songId: string, difficulty: Difficulty): boolean {
+  return songId === selectedSongId && difficulty === selectedDifficulty;
+}
+
 function renderSongList(): void {
   songListEl.innerHTML = SONG_LIST.map(
     (song) => `
@@ -840,7 +845,7 @@ function renderSongList(): void {
         <div class="song-item-levels">
           ${DIFFICULTIES.map(
             (d) =>
-              `<div class="level-block level-${d}"><span class="level-block-label">${DIFFICULTY_LABEL[d]}</span><span class="level-block-value">${song.levels[d]}</span></div>`,
+              `<div class="level-block level-${d}${isActiveLevelBlock(song.id, d) ? " active" : ""}" data-difficulty="${d}"><span class="level-block-label">${DIFFICULTY_LABEL[d]}</span><span class="level-block-value">${song.levels[d]}</span></div>`,
           ).join("")}
         </div>
       </button>`,
@@ -876,18 +881,25 @@ function openSongPopup(songId: string): void {
   renderPopupDifficultyButtons(song);
   updateMirrorToggleLabel();
   songPopup.classList.add("open");
+  renderSongList(); // 리스트 쪽 강조 표시(선택된 곡의 선택된 난이도)를 갱신
 }
 
 function closeSongPopup(): void {
   songPopup.classList.remove("open");
   selectedSongId = null;
+  renderSongList(); // 팝업이 닫히면 강조도 같이 사라진다
 }
 
+// 리스트에서 특정 난이도 블록을 직접 클릭하면 그 난이도가 선택된 채로 팝업이 뜬다.
 songListEl.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
-  const btn = target.closest<HTMLButtonElement>(".song-item");
-  if (btn === null) return;
-  openSongPopup(btn.dataset.songId!);
+  const itemBtn = target.closest<HTMLButtonElement>(".song-item");
+  if (itemBtn === null) return;
+  const levelBlock = target.closest<HTMLElement>(".level-block");
+  if (levelBlock !== null) {
+    selectedDifficulty = levelBlock.dataset.difficulty as Difficulty;
+  }
+  openSongPopup(itemBtn.dataset.songId!);
 });
 
 songPopupDifficultyEl.addEventListener("click", (event) => {
@@ -896,6 +908,7 @@ songPopupDifficultyEl.addEventListener("click", (event) => {
   if (btn === null || selectedSongId === null) return;
   selectedDifficulty = btn.dataset.difficulty as Difficulty;
   renderPopupDifficultyButtons(findSong(selectedSongId));
+  renderSongList(); // 리스트 쪽 강조도 같이 갱신
 });
 
 // Esc를 누르거나 팝업/곡 목록 바깥을 클릭하면 팝업이 닫힌다. 곡 목록 클릭은
