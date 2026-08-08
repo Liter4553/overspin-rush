@@ -321,16 +321,15 @@ h1 {
 }
 
 /* EASY 블록 왼쪽 여백에 놓는 클리어 마크 하나(선택된 난이도의 최고 기록 대표 표시).
-   난이도 라벨(.level-block-label)과 같은 크기로 표기한다. */
+   난이도 숫자(.level-block-value, 1.4rem)보다 더 크게 표기한다. */
 .song-item-clear-mark {
   display: inline-flex;
   align-self: center;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  font-size: 0.78rem;
-  font-weight: bold;
-  letter-spacing: 0.03em;
+  min-width: 34px;
+  font-size: 1.7rem;
+  font-weight: 800;
   font-family: "Consolas", monospace;
 }
 
@@ -431,12 +430,28 @@ h1 {
   gap: 7px;
 }
 
+.song-popup-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
 .song-popup-title {
   font-weight: bold;
   font-size: 1.3rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+}
+
+/* 지금 선택된 난이도의 최고 클리어 등급 하나만 크게 표시(선곡 리스트와 같은 방식) */
+.song-popup-clear-mark {
+  flex: none;
+  font-size: 1.7rem;
+  font-weight: 800;
+  font-family: "Consolas", monospace;
 }
 
 .song-popup-artist {
@@ -444,43 +459,20 @@ h1 {
   color: #8b93a7;
 }
 
-.song-popup-status {
+.song-popup-footer-row {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.song-popup-hiscore {
-  font-size: 0.85rem;
-  color: #8b93a7;
-  font-family: "Consolas", monospace;
-  letter-spacing: 0.05em;
-}
-
-.song-popup-hiscore span {
-  color: #e8eaf0;
+/* 부제("HI-SCORE") 없이 숫자만 — 미러 토글 옆 남는 공간을 채우도록 크게 표시 */
+.song-popup-hiscore-value {
+  font-size: 1.9rem;
   font-weight: bold;
-}
-
-.song-popup-clear-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.clear-tag {
-  padding: 2px 7px;
-  border: 1px solid #2a2c38;
-  border-radius: 4px;
-  font-size: 0.68rem;
-  font-weight: bold;
-  letter-spacing: 0.02em;
-  color: #4a4f5c;
+  color: #7dd3fc;
   font-family: "Consolas", monospace;
-}
-
-.clear-tag.achieved {
-  background: rgba(255, 255, 255, 0.06);
+  font-variant-numeric: tabular-nums;
 }
 
 .difficulty-buttons {
@@ -530,7 +522,6 @@ h1 {
 }
 
 .mirror-toggle {
-  align-self: flex-start;
   padding: 5px 12px;
   border: 1px solid #2a2c38;
   border-radius: 4px;

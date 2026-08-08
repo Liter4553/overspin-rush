@@ -143,14 +143,16 @@ app.innerHTML = `
       <div class="song-popup-inner">
         <div class="song-popup-jacket" id="song-popup-jacket"></div>
         <div class="song-popup-info">
-          <div class="song-popup-title" id="song-popup-title"></div>
-          <div class="song-popup-artist" id="song-popup-artist"></div>
-          <div class="song-popup-status">
-            <span class="song-popup-hiscore">HI-SCORE <span id="song-popup-hiscore-value">0</span></span>
-            <div class="song-popup-clear-tags" id="song-popup-clear-tags"></div>
+          <div class="song-popup-title-row">
+            <div class="song-popup-title" id="song-popup-title"></div>
+            <span class="song-popup-clear-mark" id="song-popup-clear-mark"></span>
           </div>
+          <div class="song-popup-artist" id="song-popup-artist"></div>
           <div class="difficulty-buttons" id="song-popup-difficulty"></div>
-          <button type="button" id="song-popup-mirror-toggle" class="mirror-toggle"></button>
+          <div class="song-popup-footer-row">
+            <button type="button" id="song-popup-mirror-toggle" class="mirror-toggle"></button>
+            <span class="song-popup-hiscore-value" id="song-popup-hiscore-value">0</span>
+          </div>
         </div>
         <button id="song-popup-start-btn">START</button>
       </div>
@@ -319,7 +321,7 @@ const songPopupJacket = document.querySelector<HTMLDivElement>("#song-popup-jack
 const songPopupTitle = document.querySelector<HTMLDivElement>("#song-popup-title")!;
 const songPopupArtist = document.querySelector<HTMLDivElement>("#song-popup-artist")!;
 const songPopupHiScoreValue = document.querySelector<HTMLSpanElement>("#song-popup-hiscore-value")!;
-const songPopupClearTags = document.querySelector<HTMLDivElement>("#song-popup-clear-tags")!;
+const songPopupClearMark = document.querySelector<HTMLSpanElement>("#song-popup-clear-mark")!;
 const songPopupDifficultyEl = document.querySelector<HTMLDivElement>("#song-popup-difficulty")!;
 const songPopupMirrorToggle = document.querySelector<HTMLButtonElement>("#song-popup-mirror-toggle")!;
 const songPopupStartBtn = document.querySelector<HTMLButtonElement>("#song-popup-start-btn")!;
@@ -1157,46 +1159,19 @@ songPopupMirrorToggle.addEventListener("click", () => {
   updateMirrorToggleLabel();
 });
 
-// 게이지 타입별로 "클리어했다"를 표시할 때 쓰는 색 — 결과 화면/선곡 리스트와 동일한 기준.
-const GAUGE_ACHIEVED_COLOR: Readonly<Record<GaugeType, string>> = {
-  normal: CLEAR_GRADE_COLOR.CLEAR,
-  hard: CLEAR_GRADE_COLOR.HARD_CLEAR,
-  challenge: CLEAR_GRADE_COLOR.CHALLENGE_CLEAR,
-};
-
-// 팝업의 HI-SCORE와 클리어 태그(노말/하드/챌린지/풀콤보/퍼펙)를 지금 선택된 난이도
-// 기준으로 갱신한다. 풀콤보/퍼펙은 게이지 타입과 무관하게 셋 중 하나라도 달성했으면 켜진다.
+// 팝업의 HI-SCORE(숫자만)와 클리어 마크를 지금 선택된 난이도 기준으로 갱신한다.
+// 클리어 마크는 선곡 리스트와 동일하게, 게이지 타입 3개 중 가장 좋은 등급 하나만 보여준다.
 function renderSongPopupStatus(song: SongEntry): void {
   songPopupHiScoreValue.textContent = String(highScores[highScoreKey(song.id, selectedDifficulty)] ?? 0);
 
-  const gradeByType: Partial<Record<GaugeType, ClearGrade>> = {};
-  for (const type of ALL_GAUGE_TYPES) {
-    gradeByType[type] = clearRecords[clearRecordKey(song.id, selectedDifficulty, type)];
+  const bestGrade = bestGradeForSong(clearRecords, song.id, selectedDifficulty, ALL_GAUGE_TYPES);
+  if (bestGrade === null) {
+    songPopupClearMark.textContent = "";
+    songPopupClearMark.style.color = "";
+  } else {
+    songPopupClearMark.textContent = CLEAR_GRADE_BADGE_TEXT[bestGrade];
+    songPopupClearMark.style.color = CLEAR_GRADE_COLOR[bestGrade];
   }
-
-  const achievedFullCombo = ALL_GAUGE_TYPES.some(
-    (type) => gradeByType[type] === "FULL_COMBO" || gradeByType[type] === "PERFECT",
-  );
-  const achievedPerfect = ALL_GAUGE_TYPES.some((type) => gradeByType[type] === "PERFECT");
-
-  const tags: { label: string; achieved: boolean; color: string }[] = [
-    { label: "NORMAL", achieved: gradeByType.normal !== undefined && gradeByType.normal !== "FAILED", color: GAUGE_ACHIEVED_COLOR.normal },
-    { label: "HARD", achieved: gradeByType.hard !== undefined && gradeByType.hard !== "FAILED", color: GAUGE_ACHIEVED_COLOR.hard },
-    {
-      label: "CHALLENGE",
-      achieved: gradeByType.challenge !== undefined && gradeByType.challenge !== "FAILED",
-      color: GAUGE_ACHIEVED_COLOR.challenge,
-    },
-    { label: "FULL COMBO", achieved: achievedFullCombo, color: CLEAR_GRADE_COLOR.FULL_COMBO },
-    { label: "PERFECT", achieved: achievedPerfect, color: CLEAR_GRADE_COLOR.PERFECT },
-  ];
-
-  songPopupClearTags.innerHTML = tags
-    .map((tag) => {
-      const style = tag.achieved ? ` style="color:${tag.color};border-color:${tag.color}"` : "";
-      return `<span class="clear-tag${tag.achieved ? " achieved" : ""}"${style}>${tag.label}</span>`;
-    })
-    .join("");
 }
 
 function openSongPopup(songId: string): void {
