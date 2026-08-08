@@ -172,3 +172,64 @@ export const PAUSE_TRIGGER_KEY = "Escape";
 // 재개 버튼을 누른 뒤 실제로 재생이 이어지기까지의 카운트다운(초).
 // 지금은 뼈대만 — 연출/스킵 등은 마일스톤 9(폴리싱)에서 다듬는다.
 export const RESUME_COUNTDOWN_SECONDS = 3;
+
+// --- 게이지 (SPEC.md 9절 폴리싱) ---
+// NORMAL(그루브형): 0%에서 시작, 곡 종료 시 보더 이상이면 클리어. 폭사 없음.
+// HARD/CHALLENGE(서바이벌형): 100%에서 시작, 하한(사실상 0%) 도달 시 즉시 폭사.
+export type GaugeType = "normal" | "hard" | "challenge";
+
+export interface GaugeTypeConfig {
+  readonly id: GaugeType;
+  readonly label: string;
+  readonly start: number; // 시작값(%)
+  readonly border: number | null; // 클리어 보더(%). survival 타입은 폭사 여부로만 판정하므로 null.
+  readonly survival: boolean; // true면 하한 도달 시 즉시 폭사.
+  readonly lowHealthCorrection: boolean; // 저체력 보정(미스 감소량 절반) 적용 여부. HARD 전용.
+  readonly missPercent: number; // 기본 미스 감소량(양수로 표기, 실제로는 차감).
+}
+
+// 저체력 보정 발동 기준(%). HARD가 이 값 이하일 때 미스 감소량이 절반이 된다.
+export const GAUGE_LOW_HEALTH_THRESHOLD = 30;
+// 감소 후 잔량이 이 값(%) 미만이면 0%로 처리하고 서바이벌 게이지는 즉시 폭사한다.
+export const GAUGE_DEATH_THRESHOLD = 2;
+// 서바이벌형(HARD/CHALLENGE) 홀드 유지 틱 증가량 및 PERFECT+/PERFECT, GREAT 증가량(%).
+export const GAUGE_SURVIVAL_PERFECT_PERCENT = 0.16;
+export const GAUGE_SURVIVAL_GREAT_PERCENT = 0.08;
+
+export const GAUGE_TYPE_CONFIG: Readonly<Record<GaugeType, GaugeTypeConfig>> = {
+  normal: {
+    id: "normal",
+    label: "NORMAL",
+    start: 0,
+    border: 70,
+    survival: false,
+    lowHealthCorrection: false,
+    missPercent: 4.5,
+  },
+  hard: {
+    id: "hard",
+    label: "HARD",
+    start: 100,
+    border: null,
+    survival: true,
+    lowHealthCorrection: true,
+    missPercent: 9.0,
+  },
+  challenge: {
+    id: "challenge",
+    label: "CHALLENGE",
+    start: 100,
+    border: null,
+    survival: true,
+    lowHealthCorrection: false,
+    missPercent: 18.0,
+  },
+};
+
+// NORMAL 전용 계수 a(%) 산출 상수. 채보 로드 시 총 판정 대상 노트 수(n)로 1회만 계산한다.
+export const GAUGE_COEFFICIENT_SMALL_CHART_THRESHOLD = 350; // n < 이 값이면 소형 채보 공식 사용.
+export const GAUGE_COEFFICIENT_SMALL_CHART_NUMERATOR = 266.67; // a = 이 값 / n
+export const GAUGE_COEFFICIENT_LARGE_CHART_NUMERATOR = 800; // a = 이 값 / (n + OFFSET)
+export const GAUGE_COEFFICIENT_LARGE_CHART_OFFSET = 700;
+
+export const DEFAULT_GAUGE_TYPE: GaugeType = "normal";
