@@ -520,6 +520,65 @@ h1 {
   display: inline-block;
 }
 
+.gauge-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 480px;
+}
+
+.gauge-bar-type {
+  width: 76px;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  color: #8b93a7;
+  text-align: right;
+}
+
+.gauge-bar-track {
+  flex: 1;
+  height: 14px;
+  border: 1px solid #2a2c38;
+  border-radius: 7px;
+  background: #12161f;
+  overflow: hidden;
+  perspective: 400px;
+}
+
+.gauge-bar-fill {
+  height: 100%;
+  width: 0%;
+  transition:
+    width 120ms linear,
+    background 200ms linear;
+}
+
+.gauge-bar-percent {
+  width: 44px;
+  font-family: "Consolas", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+
+/* GAS 전환: 게이지 바 자체가 뒤집히며 NORMAL로 바뀌는 연출(색상 반전이 아니다).
+   JS가 클래스를 붙이는 시점에 이미 색/라벨을 NORMAL로 갱신해두므로, 뒤집히는
+   동안 반대편에 새 모습이 나타나는 것처럼 보인다. */
+@keyframes gauge-flip {
+  0% {
+    transform: rotateX(0deg);
+  }
+  50% {
+    transform: rotateX(90deg);
+  }
+  100% {
+    transform: rotateX(0deg);
+  }
+}
+
+.gauge-bar-track.gas-flip {
+  animation: gauge-flip 500ms ease-in-out;
+}
+
 .pause-panel {
   position: absolute;
   inset: 0;

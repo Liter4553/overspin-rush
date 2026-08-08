@@ -18,7 +18,9 @@ import {
   applyGaugePlayJudgement,
   computeGaugeCoefficient,
   createGaugePlayState,
+  currentGauge,
   type GaugePlayState,
+  wasRelayed,
 } from "./core/gauge";
 import {
   clampPresetIndex,
@@ -228,6 +230,13 @@ app.innerHTML = `
         <span class="stat-value" id="score-display">0</span>
       </div>
     </div>
+    <div class="gauge-bar-wrap" id="gauge-bar-wrap">
+      <span class="gauge-bar-type" id="gauge-bar-type">NORMAL</span>
+      <div class="gauge-bar-track" id="gauge-bar-track">
+        <div class="gauge-bar-fill" id="gauge-bar-fill"></div>
+      </div>
+      <span class="gauge-bar-percent" id="gauge-bar-percent">0%</span>
+    </div>
     <div class="canvas-wrap">
       <canvas id="game-canvas"></canvas>
       <div class="pause-panel" id="pause-panel" hidden>
@@ -298,6 +307,11 @@ const optionsCloseBtn = document.querySelector<HTMLButtonElement>("#options-clos
 const canvas = document.querySelector<HTMLCanvasElement>("#game-canvas")!;
 const ctx = canvas.getContext("2d")!;
 const gameplayView = document.querySelector<HTMLDivElement>("#gameplay-view")!;
+const gaugeBarWrap = document.querySelector<HTMLDivElement>("#gauge-bar-wrap")!;
+const gaugeBarType = document.querySelector<HTMLSpanElement>("#gauge-bar-type")!;
+const gaugeBarTrack = document.querySelector<HTMLDivElement>("#gauge-bar-track")!;
+const gaugeBarFill = document.querySelector<HTMLDivElement>("#gauge-bar-fill")!;
+const gaugeBarPercent = document.querySelector<HTMLSpanElement>("#gauge-bar-percent")!;
 const pausePanel = document.querySelector<HTMLDivElement>("#pause-panel")!;
 const pauseCountdown = document.querySelector<HTMLDivElement>("#pause-countdown")!;
 const resumeBtn = document.querySelector<HTMLButtonElement>("#resume-btn")!;
@@ -329,6 +343,7 @@ function applySelectedLayout(canvasWidthOption: CanvasWidthOption, judgeLineMarg
   canvasWidth = CANVAS_WIDTH_OPTIONS[canvasWidthOption];
   canvas.style.width = `${canvasWidth}px`;
   canvas.style.height = `${CANVAS_HEIGHT}px`;
+  gaugeBarWrap.style.width = `${canvasWidth}px`;
   layout = computeLaneLayout(canvasWidth, DEFAULT_SCRATCH_SIDE, judgeLineMarginBottom);
 }
 
@@ -444,6 +459,32 @@ function updateHud(): void {
   }
   document.querySelector("#grade-fast")!.textContent = String(gameState.fastCount);
   document.querySelector("#grade-slow")!.textContent = String(gameState.slowCount);
+}
+
+// NORMAL은 보더(70%) 통과 여부로 초록/분홍, HARD는 빨강, CHALLENGE는 보라(SPEC.md 8-1절).
+// 30% 이하 경고 연출은 구현하지 않는다(확인된 결정).
+function gaugeBarColor(gauge: ReturnType<typeof currentGauge>): string {
+  if (gauge.type === "hard") return "#EF4444";
+  if (gauge.type === "challenge") return "#A78BFA";
+  const border = GAUGE_TYPE_CONFIG.normal.border ?? 100;
+  return gauge.value >= border ? "#F472B6" : "#4ADE80";
+}
+
+// GAS 전환은 플레이당 1번만 일어나므로, 이미 보여줬으면 다시 트리거하지 않는다.
+let gasFlipShown = false;
+
+function updateGaugeBar(): void {
+  const gauge = currentGauge(gaugePlayState);
+  gaugeBarType.textContent = GAUGE_TYPE_CONFIG[gauge.type].label;
+  gaugeBarPercent.textContent = `${Math.floor(gauge.value)}%`; // 1% 단위로 버림 표시
+  gaugeBarFill.style.width = `${gauge.value}%`;
+  gaugeBarFill.style.background = gaugeBarColor(gauge);
+
+  if (wasRelayed(gaugePlayState) && !gasFlipShown) {
+    gasFlipShown = true;
+    gaugeBarTrack.classList.add("gas-flip");
+    setTimeout(() => gaugeBarTrack.classList.remove("gas-flip"), 500);
+  }
 }
 
 // 판정 종류와 통일된 막대그래프: 가운데 PERFECT+, 좌우로 PERFECT/GREAT/GOOD/MISS가
@@ -711,6 +752,7 @@ function renderLoop(): void {
   }
 
   processHoldTicks(currentTimeMs);
+  updateGaugeBar();
 
   // 카운트업 대신 곡이 끝날 때까지 남은 시간을 카운트다운으로 보여준다.
   timeDisplay.textContent = formatTime((songDurationMs - currentTimeMs) / 1000);
@@ -746,6 +788,8 @@ async function startPlay(): Promise<void> {
   gameState = createGameState();
   gaugeCoefficientA = computeGaugeCoefficient(countJudgeableNotes(activeChart));
   gaugePlayState = createGaugePlayState(activeGaugeType, gasEnabled);
+  gasFlipShown = false;
+  updateGaugeBar();
   judgmentTicks = [];
   latestJudgment = null;
   scratchAccumulator = createScratchAccumulator();
