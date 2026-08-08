@@ -66,6 +66,7 @@ import {
   DEFAULT_NOTE_SKIN_ID,
   CLEAR_RECORDS_STORAGE_KEY,
   DEFAULT_SCRATCH_SIDE,
+  FAIL_RESULTS_DELAY_MS,
   FAIL_SHUTTER_DROP_MS,
   GAUGE_TYPE_CONFIG,
   type GaugeType,
@@ -154,10 +155,6 @@ app.innerHTML = `
       </div>
     </div>
     <div class="option-row">
-      <label>&nbsp;</label>
-      <button type="button" id="option-save-preset">이 프리셋에 저장</button>
-    </div>
-    <div class="option-row">
       <label for="option-canvas-width">캔버스 폭</label>
       <select id="option-canvas-width">
         <option value="narrow">좁게</option>
@@ -213,7 +210,10 @@ app.innerHTML = `
       <label for="option-gas-enabled">GAS <span class="info-icon" id="gas-info-icon">\u{1F6C8}</span></label>
       <input type="checkbox" id="option-gas-enabled" />
     </div>
-    <button type="button" id="options-close-btn">닫기</button>
+    <div class="options-footer">
+      <button type="button" id="option-save-preset">이 프리셋에 저장</button>
+      <button type="button" id="options-close-btn">닫기</button>
+    </div>
   </div>
   </div>
   <div class="info-tooltip" id="gas-info-tooltip" hidden></div>
@@ -267,6 +267,7 @@ app.innerHTML = `
   <div class="results-panel" id="results-panel" hidden>
     <h2>RESULT</h2>
     <div class="clear-grade-badge" id="clear-grade-badge"></div>
+    <div class="clear-grade-gauge" id="clear-grade-gauge"></div>
     <div class="results-summary">
       <div class="summary-stat"><span class="summary-label">SCORE</span><span class="summary-value" id="result-score">0</span></div>
       <div class="summary-stat"><span class="summary-label">이론치</span><span class="summary-value" id="result-theoretical">0</span></div>
@@ -333,6 +334,7 @@ const pauseCountdown = document.querySelector<HTMLDivElement>("#pause-countdown"
 const resumeBtn = document.querySelector<HTMLButtonElement>("#resume-btn")!;
 const resultsPanel = document.querySelector<HTMLDivElement>("#results-panel")!;
 const clearGradeBadge = document.querySelector<HTMLDivElement>("#clear-grade-badge")!;
+const clearGradeGauge = document.querySelector<HTMLDivElement>("#clear-grade-gauge")!;
 const resultGradePanel = document.querySelector<HTMLDivElement>("#result-grade-panel")!;
 const resultTimingChart = document.querySelector<HTMLDivElement>("#result-timing-chart")!;
 const restartBtn = document.querySelector<HTMLButtonElement>("#restart-btn")!;
@@ -534,22 +536,25 @@ function renderTimingChart(breakdown: GradeTimingBreakdown): void {
     .join("");
 }
 
+// 결과 화면 헤드라인 문구. HARD/CHALLENGE 클리어도 별도 문구 없이 그냥 CLEAR로
+// 표시한다 — 어떤 게이지로 클리어했는지는 아래 색상으로만 구분한다.
 const CLEAR_GRADE_LABEL: Readonly<Record<ClearGrade, string>> = {
   FAILED: "FAILED",
   CLEAR: "CLEAR",
-  HARD_CLEAR: "HARD CLEAR",
-  CHALLENGE_CLEAR: "CHALLENGE CLEAR",
+  HARD_CLEAR: "CLEAR",
+  CHALLENGE_CLEAR: "CLEAR",
   FULL_COMBO: "FULL COMBO",
   PERFECT: "PERFECT",
 };
 
+// 결과 화면 배지와 선곡 리스트 클리어 마크가 공유하는 색상 기준.
 const CLEAR_GRADE_COLOR: Readonly<Record<ClearGrade, string>> = {
   FAILED: "#EF4444",
-  CLEAR: "#7DD3FC",
-  HARD_CLEAR: "#F87171",
-  CHALLENGE_CLEAR: "#C084FC",
-  FULL_COMBO: "#4ADE80",
-  PERFECT: "#FAC775",
+  CLEAR: "#4ADE80",
+  HARD_CLEAR: "#EF4444",
+  CHALLENGE_CLEAR: "#A78BFA",
+  FULL_COMBO: "#FFFFFF",
+  PERFECT: "#FACC15",
 };
 
 // 선곡 리스트 난이도 블록은 좁아서 등급 전체를 못 적는다 — 짧은 약자로 표시.
@@ -575,7 +580,7 @@ function triggerFailure(): void {
     document.exitPointerLock();
   }
 
-  setTimeout(showResults, FAIL_SHUTTER_DROP_MS);
+  setTimeout(showResults, FAIL_SHUTTER_DROP_MS + FAIL_RESULTS_DELAY_MS);
 }
 
 function showResults(): void {
@@ -586,6 +591,7 @@ function showResults(): void {
   const clearGrade = computeClearGrade(activeChart, gameState, finalGauge);
   clearGradeBadge.textContent = CLEAR_GRADE_LABEL[clearGrade];
   clearGradeBadge.style.color = CLEAR_GRADE_COLOR[clearGrade];
+  clearGradeGauge.textContent = `게이지 ${Math.floor(finalGauge.value)}%`; // 1% 단위로 버림(HUD와 동일 규칙)
 
   // 기록은 실제로 굴린 게이지 타입(activeGaugeType)을 기준으로 저장한다 — GAS로 전환됐다면
   // finalGauge.type은 이미 "normal"이지만, 플레이어가 시도한 모드는 여전히 HARD/CHALLENGE다.
@@ -925,7 +931,7 @@ optionGaugeTypeSelect.addEventListener("change", updateGasRowVisibility);
 updateGasRowVisibility();
 
 const GAS_TOOLTIP_TEXT =
-  "Gauge Assist System — 표면 게이지가 0%가 되어도 곧바로 중단되지 않고, 병행 계산 중인 NORMAL 게이지 잔량을 이어받아 계속 진행합니다.";
+  "Gauge Assist System — 게이지가 0이 되어도 게임을 종료하지 않고 NORMAL게이지로 자동 전환됩니다.";
 gasInfoTooltip.textContent = GAS_TOOLTIP_TEXT;
 
 // 팝업 위치는 마우스 커서에 종속 — 아이콘 위에서 움직이는 동안 계속 따라간다.
@@ -1073,6 +1079,15 @@ function isActiveLevelBlock(songId: string, difficulty: Difficulty): boolean {
   return songId === selectedSongId && difficulty === selectedDifficulty;
 }
 
+// EASY 블록 왼쪽 여백에 표시하는 클리어 마크 하나. 3개 난이도마다 따로 표시하지 않고,
+// 지금 선택된 난이도(selectedDifficulty, 전역)의 기록만 대표로 보여준다 — 난이도를
+// 바꿔 고를 때마다(레벨 블록 클릭/팝업 난이도 버튼) renderSongList가 다시 불려서 자동으로 교체된다.
+function clearMarkHtml(songId: string): string {
+  const bestGrade = bestGradeForSong(clearRecords, songId, selectedDifficulty, ALL_GAUGE_TYPES);
+  if (bestGrade === null) return `<span class="song-item-clear-mark"></span>`;
+  return `<span class="song-item-clear-mark" style="color:${CLEAR_GRADE_COLOR[bestGrade]}">${CLEAR_GRADE_BADGE_TEXT[bestGrade]}</span>`;
+}
+
 function renderSongList(): void {
   songListEl.innerHTML = SONG_LIST.map(
     (song) => `
@@ -1083,14 +1098,11 @@ function renderSongList(): void {
           <div class="song-item-artist">${song.artist}</div>
         </div>
         <div class="song-item-levels">
-          ${DIFFICULTIES.map((d) => {
-            const bestGrade = bestGradeForSong(clearRecords, song.id, d, ALL_GAUGE_TYPES);
-            const badge =
-              bestGrade === null
-                ? ""
-                : `<span class="level-block-clear" style="color:${CLEAR_GRADE_COLOR[bestGrade]}">${CLEAR_GRADE_BADGE_TEXT[bestGrade]}</span>`;
-            return `<div class="level-block level-${d}${isActiveLevelBlock(song.id, d) ? " active" : ""}" data-difficulty="${d}"><span class="level-block-label">${DIFFICULTY_LABEL[d]}</span><span class="level-block-value">${song.levels[d]}</span>${badge}</div>`;
-          }).join("")}
+          ${clearMarkHtml(song.id)}
+          ${DIFFICULTIES.map(
+            (d) =>
+              `<div class="level-block level-${d}${isActiveLevelBlock(song.id, d) ? " active" : ""}" data-difficulty="${d}"><span class="level-block-label">${DIFFICULTY_LABEL[d]}</span><span class="level-block-value">${song.levels[d]}</span></div>`,
+          ).join("")}
         </div>
       </button>`,
   ).join("");
