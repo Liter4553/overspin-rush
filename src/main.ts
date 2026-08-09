@@ -7,6 +7,7 @@ import { computeLaneLayout } from "./render/canvas";
 import { drawFxNotes, drawJudgeLine, drawLaneBackground, drawNotes, type NoteColors } from "./render/noteRenderer";
 import { addJudgmentTick, drawJudgmentBar, type JudgmentTick, type TickSource } from "./render/judgmentBar";
 import { drawComboDisplay, drawJudgmentText, type LatestJudgment } from "./render/judgmentText";
+import { addHitEffect, createHitEffect, drawHitEffects, pruneExpiredHitEffects, type HitEffect } from "./render/hitEffect";
 import { applyAutoMiss, createNoteTracker, findNearestPendingNote, markJudged } from "./core/noteState";
 import { applyHoldTick, applyJudgement, createGameState } from "./core/gameState";
 import { computeErrorMs, displaySign, judge } from "./core/judge";
@@ -465,6 +466,7 @@ let noteTracker = createNoteTracker(activeChart);
 let gameState = createGameState();
 let judgmentTicks: JudgmentTick[] = [];
 let latestJudgment: LatestJudgment | null = null;
+let hitEffects: HitEffect[] = [];
 let scratchAccumulator = createScratchAccumulator();
 let scratchDirectionState = createScratchDirectionState();
 // 레인당 활성 홀드는 최대 1개. keyup 시 즉시 삭제되므로("재개되지 않음") 맵에
@@ -697,6 +699,7 @@ function judgeAndApply(lane: NoteLane, inputTimeMs: number, source: TickSource):
     createdAtMs: clock.currentTime * 1000,
   });
   latestJudgment = { grade: result.grade, sign, shownAtMs: clock.currentTime * 1000 };
+  hitEffects = addHitEffect(hitEffects, createHitEffect(lane, result.grade, clock.currentTime * 1000));
   updateHud();
 }
 
@@ -889,6 +892,8 @@ function renderLoop(): void {
   drawFxNotes(ctx, layout, pendingNotes, currentTimeMs, effectiveGreenNumberMs, activeNoteColors);
   drawNotes(ctx, layout, pendingNotes, currentTimeMs, effectiveGreenNumberMs, activeNoteColors);
   drawJudgeLine(ctx, layout);
+  hitEffects = pruneExpiredHitEffects(hitEffects, currentTimeMs);
+  drawHitEffects(ctx, layout, hitEffects, currentTimeMs);
   drawJudgmentBar(ctx, layout, judgmentTicks, currentTimeMs);
   drawJudgmentText(ctx, layout, latestJudgment, currentTimeMs);
   drawComboDisplay(ctx, layout, gameState.combo);
@@ -917,6 +922,7 @@ async function startPlay(): Promise<void> {
   updateGaugeBar();
   judgmentTicks = [];
   latestJudgment = null;
+  hitEffects = [];
   scratchAccumulator = createScratchAccumulator();
   scratchDirectionState = createScratchDirectionState();
   activeHolds = new Map();
