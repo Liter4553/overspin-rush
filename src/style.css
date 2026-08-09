@@ -691,12 +691,41 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(11, 13, 18, 0.8);
+  background: rgba(7, 8, 12, 0.9);
+  backdrop-filter: blur(3px);
   border-radius: 4px;
 }
 
 .pause-panel[hidden] {
   display: none;
+}
+
+@keyframes pause-panel-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pause-inner-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.pause-panel.entering {
+  animation: pause-panel-fade 180ms ease-out;
+}
+
+.pause-panel.entering .pause-inner {
+  animation: pause-inner-pop 220ms ease-out;
 }
 
 .pause-inner {

@@ -716,9 +716,10 @@ async function pauseGame(): Promise<void> {
   resumeBtn.hidden = false;
   pauseCountdown.hidden = true;
   pausePanel.hidden = false;
+  pausePanel.classList.add("entering"); // 배경 페이드인 + 패널 팝인(다음 일시정지 때도 재생되도록 resumeGame에서 제거)
 }
 
-// 재개 클릭 -> 카운트다운(뼈대만, 연출/스킵 등은 마일스톤 9에서 다듬는다) -> 실제 재생 재개.
+// 재개 클릭 -> 카운트다운 -> 실제 재생 재개.
 // 카운트다운 동안은 phase가 "resuming"이라 키/스크래치 입력과 자동 MISS가 전부 멈춰있다.
 async function resumeGame(): Promise<void> {
   if (phase !== "paused") return;
@@ -740,6 +741,7 @@ async function resumeGame(): Promise<void> {
 
   phase = "playing";
   pausePanel.hidden = true;
+  pausePanel.classList.remove("entering");
   await clock.resume();
   renderLoop();
 }
@@ -940,6 +942,7 @@ async function startPlay(): Promise<void> {
   gameplayView.hidden = false;
   resultsPanel.hidden = true;
   pausePanel.hidden = true;
+  pausePanel.classList.remove("entering");
   failShutter.hidden = true;
   failShutter.classList.remove("dropping");
   applyZoom();
