@@ -133,8 +133,12 @@ export const JUDGE_GRADE_COLORS: Readonly<Record<string, string>> = {
 // --- 홀드 틱 (마일스톤 6에서 사용) ---
 export const DEFAULT_HOLD_TICK_INTERVAL_BEATS = 1;
 
-// 판정 텍스트가 화면에 머무는 시간(ms). 애니메이션은 마일스톤 9에서.
+// 판정 텍스트가 화면에 머무는 시간(ms).
 export const JUDGE_TEXT_DISPLAY_MS = 500;
+// 등장 시 살짝 커졌다가 원래 크기로 줄어드는 팝인 구간 길이(ms, DISPLAY_MS 앞부분).
+export const JUDGE_TEXT_POP_MS = 90;
+// 사라지기 전 페이드아웃 구간 길이(ms, DISPLAY_MS 뒷부분).
+export const JUDGE_TEXT_FADE_MS = 200;
 
 // 노트 히트 이펙트(판정선 플래시)가 지속되는 시간(ms). MISS는 이펙트가 없다.
 export const HIT_EFFECT_DURATION_MS = 220;
