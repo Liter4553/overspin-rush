@@ -741,7 +741,9 @@ h1 {
   color: #7dd3fc;
 }
 
-#resume-btn {
+#resume-btn,
+#pause-restart-btn,
+#pause-exit-btn {
   padding: 12px 32px;
   font-size: 1rem;
   border: 1px solid #7dd3fc;
@@ -751,8 +753,18 @@ h1 {
   cursor: pointer;
 }
 
-#resume-btn:hover {
+#resume-btn:hover,
+#pause-restart-btn:hover {
   background: #7dd3fc22;
+}
+
+.pause-exit-btn {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.pause-exit-btn:hover {
+  background: #ef444422;
 }
 
 .pause-countdown {

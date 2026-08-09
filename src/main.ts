@@ -274,6 +274,8 @@ app.innerHTML = `
           <h2>PAUSE</h2>
           <div class="pause-countdown" id="pause-countdown" hidden></div>
           <button id="resume-btn">재개</button>
+          <button id="pause-restart-btn">다시시작</button>
+          <button id="pause-exit-btn" class="pause-exit-btn">나가기</button>
         </div>
       </div>
       <div class="fail-shutter" id="fail-shutter" hidden>
@@ -360,6 +362,8 @@ const pausePanel = document.querySelector<HTMLDivElement>("#pause-panel")!;
 const failShutter = document.querySelector<HTMLDivElement>("#fail-shutter")!;
 const pauseCountdown = document.querySelector<HTMLDivElement>("#pause-countdown")!;
 const resumeBtn = document.querySelector<HTMLButtonElement>("#resume-btn")!;
+const pauseRestartBtn = document.querySelector<HTMLButtonElement>("#pause-restart-btn")!;
+const pauseExitBtn = document.querySelector<HTMLButtonElement>("#pause-exit-btn")!;
 const resultsPanel = document.querySelector<HTMLDivElement>("#results-panel")!;
 const clearGradeBadge = document.querySelector<HTMLDivElement>("#clear-grade-badge")!;
 const resultGaugeBarType = document.querySelector<HTMLSpanElement>("#result-gauge-bar-type")!;
@@ -748,6 +752,18 @@ async function resumeGame(): Promise<void> {
 
 resumeBtn.addEventListener("click", () => {
   void resumeGame();
+});
+
+pauseRestartBtn.addEventListener("click", async () => {
+  await startPlay();
+});
+
+// 일시정지 화면에서 바로 선곡 화면으로 나간다. Esc/락 해제로 들어온 일시정지라
+// Pointer Lock은 이미 풀려 있는 상태다(pauseGame이 호출되는 두 경로 모두 그렇다).
+pauseExitBtn.addEventListener("click", () => {
+  pausePanel.hidden = true;
+  pausePanel.classList.remove("entering");
+  goToSongSelect();
 });
 
 // pointerlockchange는 "지금 안 잠겨있다"는 상태 스냅샷일 뿐 방향을 안 알려준다.
