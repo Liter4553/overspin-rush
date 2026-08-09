@@ -265,7 +265,7 @@ FX 롱노트는 시작 판정으로 1회 증감 후, 유지 구간 동안 틱마
 - GAS로 구제된 플레이는 HARD/CHALLENGE 마크를 획득할 수 없다.
 
 ### 결과 등급
-FAILED / CLEAR / HARD CLEAR / CHALLENGE CLEAR / FULL COMBO / PERFECT. 풀콤보는 게이지 타입과 무관하게 전 노트를 굿 이상으로 처리하면 성립. 곡+난이도+게이지타입별 클리어 마크를 저장하고 선곡 리스트/결과창에 표시(추후 단계).
+FAILED / CLEAR / HARD CLEAR / CHALLENGE CLEAR / FULL COMBO / PERFECT. 풀콤보는 게이지 타입과 무관하게 전 노트를 굿 이상으로 처리하면 성립. 곡+난이도+게이지타입별 클리어 마크를 저장하고 선곡 리스트(약자)/팝업(풀네임)/결과창에 표시(구현 완료). 곡+난이도별 최고 점수(HI-SCORE)와 정확도도 함께 저장/표시.
 
 ### 구현 요구사항
 - 게이지 계산은 순수 함수 모듈(`src/core/gauge.ts`)로 분리, 렌더링/사운드/입력과 분리.
