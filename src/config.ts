@@ -143,6 +143,11 @@ export const JUDGE_TEXT_FADE_MS = 200;
 // 노트 히트 이펙트(판정선 플래시)가 지속되는 시간(ms). MISS는 이펙트가 없다.
 export const HIT_EFFECT_DURATION_MS = 220;
 
+// 키빔(판정선에서 위로 뻗는 입력 피드백) 지속 시간과 길이. 판정 성공 여부와 무관하게
+// 키를 누르는/스크래치가 유효한 순간마다 뜬다(히트 이펙트와는 별개).
+export const KEY_BEAM_DURATION_MS = 150;
+export const KEY_BEAM_LENGTH_PX = 200;
+
 // --- 결과 화면 (SPEC.md 5절) ---
 // 판정이 붙는 레인. 마일스톤 7에서 FX가 추가되어 이제 모든 레인이 판정 대상이다.
 export const JUDGEABLE_LANES: readonly NoteLane[] = [0, 1, 2, "fx", "scratch"];

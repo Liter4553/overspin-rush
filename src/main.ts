@@ -8,6 +8,7 @@ import { drawFxNotes, drawJudgeLine, drawLaneBackground, drawNotes, type NoteCol
 import { addJudgmentTick, drawJudgmentBar, type JudgmentTick, type TickSource } from "./render/judgmentBar";
 import { drawComboDisplay, drawJudgmentText, type LatestJudgment } from "./render/judgmentText";
 import { addHitEffect, createHitEffect, drawHitEffects, pruneExpiredHitEffects, type HitEffect } from "./render/hitEffect";
+import { addKeyBeam, drawKeyBeams, pruneExpiredKeyBeams, type KeyBeam } from "./render/keyBeam";
 import { applyAutoMiss, createNoteTracker, findNearestPendingNote, markJudged } from "./core/noteState";
 import { applyHoldTick, applyJudgement, createGameState } from "./core/gameState";
 import { computeErrorMs, displaySign, judge } from "./core/judge";
@@ -467,6 +468,7 @@ let gameState = createGameState();
 let judgmentTicks: JudgmentTick[] = [];
 let latestJudgment: LatestJudgment | null = null;
 let hitEffects: HitEffect[] = [];
+let keyBeams: KeyBeam[] = [];
 let scratchAccumulator = createScratchAccumulator();
 let scratchDirectionState = createScratchDirectionState();
 // 레인당 활성 홀드는 최대 1개. keyup 시 즉시 삭제되므로("재개되지 않음") 맵에
@@ -802,6 +804,7 @@ function handleKeydown(event: KeyboardEvent): void {
   const lane = resolveLaneFromKey(event.key, DEFAULT_KEYMAP);
   if (lane === null) return;
 
+  keyBeams = addKeyBeam(keyBeams, { lane, startedAtMs: clock.currentTime * 1000 });
   const inputTimeMs = clock.toGameTime(event.timeStamp) * 1000;
   judgeAndApply(lane, inputTimeMs, "key");
 }
@@ -833,6 +836,7 @@ function handleMouseMove(event: MouseEvent): void {
   scratchDirectionState = dirResult.state;
   if (!dirResult.valid) return; // 무효 입력(같은 방향 연속)은 조용히 무시, 노트 소모 없음
 
+  keyBeams = addKeyBeam(keyBeams, { lane: "scratch", startedAtMs: clock.currentTime * 1000 });
   judgeAndApply("scratch", inputTimeMs, "scratch");
 }
 
@@ -892,6 +896,8 @@ function renderLoop(): void {
   drawFxNotes(ctx, layout, pendingNotes, currentTimeMs, effectiveGreenNumberMs, activeNoteColors);
   drawNotes(ctx, layout, pendingNotes, currentTimeMs, effectiveGreenNumberMs, activeNoteColors);
   drawJudgeLine(ctx, layout);
+  keyBeams = pruneExpiredKeyBeams(keyBeams, currentTimeMs);
+  drawKeyBeams(ctx, layout, keyBeams, currentTimeMs, activeNoteColors);
   hitEffects = pruneExpiredHitEffects(hitEffects, currentTimeMs);
   drawHitEffects(ctx, layout, hitEffects, currentTimeMs);
   drawJudgmentBar(ctx, layout, judgmentTicks, currentTimeMs);
@@ -923,6 +929,7 @@ async function startPlay(): Promise<void> {
   judgmentTicks = [];
   latestJudgment = null;
   hitEffects = [];
+  keyBeams = [];
   scratchAccumulator = createScratchAccumulator();
   scratchDirectionState = createScratchDirectionState();
   activeHolds = new Map();
