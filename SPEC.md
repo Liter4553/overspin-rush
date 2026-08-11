@@ -140,11 +140,11 @@
 
 플레이 시작 전 옵션 화면에서 설정. 모두 채보 원본을 변형하지 않고 런타임에 적용한다.
 
-- **속도**: 배속(0.5~10.0, 0.25 단위) + 그린넘버 직접 입력. 내부적으로는 `effectiveGreenNumberMs` 하나만 진짜 상태이며, 배속과 그린넘버는 이 값을 조작하는 두 가지 입력 경로일 뿐이다.
-  - `effectiveGreenNumberMs = baseGreenNumberMs / speedMultiplier` (기준: 배속 1.0x = `baseGreenNumberMs`, 기본값 800ms)
-  - 배속을 입력하면 그린넘버가 위 공식으로 재계산되어 함께 표시된다.
-  - 그린넘버를 직접 입력하면 그 값이 `effectiveGreenNumberMs`에 바로 반영되고, 배속 표시값은 `baseGreenNumberMs / effectiveGreenNumberMs`로 역산되어 함께 표시된다.
-  - 플레이 중 단축키로 실시간 변경.
+- **속도(2026-08-11 개정 — IIDX식 그린넘버 고정)**: 사용자가 조절하는 건 **그린넘버**(50~1500, 5 단위, 기본값 150) 하나뿐이다. 배속은 옵션 화면에서 완전히 사라졌고, 순수 내부 계산값으로만 존재한다.
+  - `그린넘버 = BPM x 배속`이 항상 유지되도록, 매 순간 `배속 = 그린넘버 / 현재BPM`을 자동으로 계산한다(`src/core/speedOptions.ts`의 `speedMultiplierForBpm`).
+  - 실제 렌더링에 쓰이는 낙하 시간(ms)은 `baseGreenNumberMs / 배속`(`fallTimeMsForBpm`)이며, `FALL_TIME_MIN_MS`~`FALL_TIME_MAX_MS`로 clamp한다. 곡 도중 BPM이 바뀌는 구간이 있으면 매 프레임 그 시점의 BPM으로 다시 계산되어, 그린넘버가 같으면 BPM이 달라도 노트가 항상 같은 체감 속도로 떨어진다.
+  - HUD의 SPEED 표시는 이제 사용자가 정하는 값이 아니라 위 공식으로 매 프레임 계산되는 결과값이다.
+  - 플레이 중 단축키(1/2)로 그린넘버 자체를 실시간 증감.
 - **캔버스 폭**: 좁게 / 보통(기본값) / 넓게 3단계. 보통을 기준으로 좁게/넓게는 각각 ∓30%.
   - 보통 480px 기준: 좁게 336px, 넓게 624px. 높이는 800px로 고정, 폭만 변경.
   - `NOTE_LANE_WIDTH`/`SCRATCH_LANE_WIDTH`는 선택된 폭으로부터 위 스크래치 레인 공식으로 매번 유도.

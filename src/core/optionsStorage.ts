@@ -4,10 +4,10 @@ import type { Arrangement } from "./laneArrangement";
 import { ALL_BINDABLE_SLOTS, createDefaultKeyBindings, type KeyBindings } from "./keymapOptions";
 import {
   AUDIO_OFFSET_MS,
-  BASE_GREEN_NUMBER_MS,
   type CanvasWidthOption,
   DEFAULT_CANVAS_WIDTH_OPTION,
   DEFAULT_GAUGE_TYPE,
+  DEFAULT_GREEN_NUMBER,
   DEFAULT_KEYMAP,
   DEFAULT_NOTE_SKIN_ID,
   DEFAULT_SCRATCH_SIDE,
@@ -21,7 +21,7 @@ import {
 
 export interface OptionsSnapshot {
   canvasWidthOption: CanvasWidthOption;
-  effectiveGreenNumberMs: number;
+  greenNumber: number;
   arrangement: Arrangement;
   audioOffsetMs: number;
   inputOffsetMs: number;
@@ -37,7 +37,7 @@ export interface OptionsSnapshot {
 export function createDefaultSnapshot(): OptionsSnapshot {
   return {
     canvasWidthOption: DEFAULT_CANVAS_WIDTH_OPTION,
-    effectiveGreenNumberMs: BASE_GREEN_NUMBER_MS,
+    greenNumber: DEFAULT_GREEN_NUMBER,
     arrangement: "normal",
     audioOffsetMs: AUDIO_OFFSET_MS,
     inputOffsetMs: INPUT_OFFSET_MS,
@@ -69,7 +69,7 @@ function isValidSnapshot(value: unknown): value is OptionsSnapshot {
   const v = value as Record<string, unknown>;
   return (
     (v.canvasWidthOption === "narrow" || v.canvasWidthOption === "normal" || v.canvasWidthOption === "wide") &&
-    typeof v.effectiveGreenNumberMs === "number" &&
+    typeof v.greenNumber === "number" &&
     (v.arrangement === "normal" || v.arrangement === "mirror") &&
     typeof v.audioOffsetMs === "number" &&
     typeof v.inputOffsetMs === "number" &&

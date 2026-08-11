@@ -13,7 +13,7 @@ import { applyAutoMiss, createNoteTracker, findNearestPendingNote, markJudged } 
 import { applyHoldTick, applyJudgement, createGameState } from "./core/gameState";
 import { computeErrorMs, displaySign, judge } from "./core/judge";
 import { advanceHoldTicks, computeTickIntervalMs, startActiveHold, type ActiveHold } from "./core/holdState";
-import { clampSpeed, greenNumberMsToSpeed, speedToGreenNumberMs } from "./core/speedOptions";
+import { clampGreenNumber, fallTimeMsForBpm, speedMultiplierForBpm } from "./core/speedOptions";
 import { applyArrangement, type Arrangement } from "./core/laneArrangement";
 import {
   bindingsToKeymap,
@@ -84,16 +84,20 @@ import {
   CANVAS_WIDTH_OPTIONS,
   DEFAULT_CANVAS_WIDTH_OPTION,
   DEFAULT_GAUGE_TYPE,
+  DEFAULT_GREEN_NUMBER,
   DEFAULT_KEYMAP,
   DEFAULT_NOTE_SKIN_ID,
   CLEAR_RECORDS_STORAGE_KEY,
   DEFAULT_SCRATCH_SIDE,
   FAIL_RESULTS_DELAY_MS,
   FAIL_SHUTTER_DROP_MS,
+  FALL_TIME_MAX_MS,
+  FALL_TIME_MIN_MS,
   GAUGE_TYPE_CONFIG,
   type GaugeType,
-  GREEN_NUMBER_MAX_MS,
-  GREEN_NUMBER_MIN_MS,
+  GREEN_NUMBER_MAX,
+  GREEN_NUMBER_MIN,
+  GREEN_NUMBER_STEP,
   HIGH_SCORE_STORAGE_KEY,
   INPUT_OFFSET_MS,
   JUDGEABLE_LANES,
@@ -118,9 +122,6 @@ import {
   type ScratchSide,
   SPEED_DECREASE_KEY,
   SPEED_INCREASE_KEY,
-  SPEED_MAX,
-  SPEED_MIN,
-  SPEED_STEP,
   VIEWPORT_FIT_MARGIN_PX,
   VIEWPORT_FIT_MAX_SCALE,
   VIEWPORT_FIT_MIN_SCALE,
@@ -198,12 +199,8 @@ app.innerHTML = `
       </select>
     </div>
     <div class="option-row">
-      <label for="option-speed">배속</label>
-      <input type="number" id="option-speed" min="${SPEED_MIN}" max="${SPEED_MAX}" step="${SPEED_STEP}" value="1" />
-    </div>
-    <div class="option-row">
-      <label for="option-green-number">그린넘버(ms)</label>
-      <input type="number" id="option-green-number" min="${GREEN_NUMBER_MIN_MS}" max="${GREEN_NUMBER_MAX_MS}" value="${BASE_GREEN_NUMBER_MS}" />
+      <label for="option-green-number">그린넘버</label>
+      <input type="number" id="option-green-number" min="${GREEN_NUMBER_MIN}" max="${GREEN_NUMBER_MAX}" step="${GREEN_NUMBER_STEP}" value="${DEFAULT_GREEN_NUMBER}" />
     </div>
     <div class="option-row">
       <label for="option-audio-offset">오디오 오프셋(ms)</label>
@@ -378,7 +375,6 @@ const songPopupMirrorToggle = document.querySelector<HTMLButtonElement>("#song-p
 const songPopupStartBtn = document.querySelector<HTMLButtonElement>("#song-popup-start-btn")!;
 const optionsOverlay = document.querySelector<HTMLDivElement>("#options-overlay")!;
 const optionCanvasWidthSelect = document.querySelector<HTMLSelectElement>("#option-canvas-width")!;
-const optionSpeedInput = document.querySelector<HTMLInputElement>("#option-speed")!;
 const optionGreenNumberInput = document.querySelector<HTMLInputElement>("#option-green-number")!;
 const optionAudioOffsetInput = document.querySelector<HTMLInputElement>("#option-audio-offset")!;
 const optionInputOffsetInput = document.querySelector<HTMLInputElement>("#option-input-offset")!;
@@ -538,8 +534,9 @@ let scratchDirectionState = createScratchDirectionState();
 // 레인당 활성 홀드는 최대 1개. keyup 시 즉시 삭제되므로("재개되지 않음") 맵에
 // 남아 있다는 것 자체가 "지금 눌려서 틱이 발생 중"이라는 뜻이다.
 let activeHolds = new Map<NoteLane, ActiveHold>();
-// 진짜 상태는 이 값 하나뿐(SPEC.md 6절) — 배속은 이 값을 표시/조작하는 입력 경로일 뿐이다.
-let effectiveGreenNumberMs = BASE_GREEN_NUMBER_MS;
+// 진짜 상태는 그린넘버 하나뿐(SPEC.md 6절, 2026-08-11 개정) — 배속은 더 이상 사용자가
+// 직접 설정하지 않고, 매 프레임 현재 BPM으로부터 자동으로 계산되는 파생값이다.
+let greenNumber = DEFAULT_GREEN_NUMBER;
 // 곡 전체 길이(ms). TIME 표시를 카운트다운으로 보여주기 위해 플레이 시작 시 한 번 계산해둔다.
 let songDurationMs = 0;
 let selectedArrangement: Arrangement = "normal";
@@ -563,8 +560,11 @@ const ALL_GAUGE_TYPES = Object.keys(GAUGE_TYPE_CONFIG) as GaugeType[];
 let clearRecords: ClearRecords = parseClearRecords(localStorage.getItem(CLEAR_RECORDS_STORAGE_KEY));
 let highScores: HighScores = parseHighScores(localStorage.getItem(HIGH_SCORE_STORAGE_KEY));
 
+// SPEED HUD는 이제 사용자가 정하는 값이 아니라, 그린넘버와 지금 BPM으로부터 매번
+// 계산되는 결과값이다(그린넘버가 같아도 BPM이 바뀌는 구간에서는 이 값도 함께 바뀐다).
 function updateSpeedDisplay(): void {
-  const speed = greenNumberMsToSpeed(effectiveGreenNumberMs, BASE_GREEN_NUMBER_MS);
+  const bpm = currentBpm(activeChart.bpmChanges, clock.currentTime * 1000);
+  const speed = speedMultiplierForBpm(greenNumber, bpm);
   speedDisplay.textContent = `${speed.toFixed(2)}x`;
 }
 
@@ -892,9 +892,8 @@ function handleKeydown(event: KeyboardEvent): void {
 
   if (event.key === SPEED_DECREASE_KEY || event.key === SPEED_INCREASE_KEY) {
     const direction = event.key === SPEED_DECREASE_KEY ? -1 : 1;
-    const currentSpeed = greenNumberMsToSpeed(effectiveGreenNumberMs, BASE_GREEN_NUMBER_MS);
-    const nextSpeed = clampSpeed(currentSpeed + direction * SPEED_STEP);
-    effectiveGreenNumberMs = speedToGreenNumberMs(nextSpeed, BASE_GREEN_NUMBER_MS);
+    greenNumber = clampGreenNumber(greenNumber + direction * GREEN_NUMBER_STEP);
+    optionGreenNumberInput.value = String(greenNumber); // 옵션 화면을 다시 열었을 때도 실시간 변경값이 보이도록
     updateSpeedDisplay();
     return;
   }
@@ -988,7 +987,12 @@ function renderLoop(): void {
 
   // 카운트업 대신 곡이 끝날 때까지 남은 시간을 카운트다운으로 보여준다.
   timeDisplay.textContent = formatTime((songDurationMs - currentTimeMs) / 1000);
-  bpmDisplay.textContent = String(currentBpm(activeChart.bpmChanges, currentTimeMs));
+  const bpmNow = currentBpm(activeChart.bpmChanges, currentTimeMs);
+  bpmDisplay.textContent = String(bpmNow);
+  // 그린넘버 고정: 지금 BPM에 맞춰 매 프레임 낙하 시간을 다시 계산한다 — BPM이 바뀌는
+  // 구간(있다면)에서도 노트가 화면에서 늘 같은 체감 속도로 떨어지게 한다.
+  const fallTimeMs = Math.min(FALL_TIME_MAX_MS, Math.max(FALL_TIME_MIN_MS, fallTimeMsForBpm(greenNumber, bpmNow, BASE_GREEN_NUMBER_MS)));
+  updateSpeedDisplay();
 
   // 홀드는 시작 판정 즉시 state가 "judged"로 바뀌지만, 꼬리(time+duration)가 판정선을
   // 지날 때까지는 계속 그려야 한다 — 몸통이 누르자마자 사라지면 안 된다.
@@ -998,8 +1002,8 @@ function renderLoop(): void {
 
   ctx.clearRect(0, 0, canvasWidth, CANVAS_HEIGHT);
   drawLaneBackground(ctx, layout);
-  drawFxNotes(ctx, layout, pendingNotes, currentTimeMs, effectiveGreenNumberMs, activeNoteColors);
-  drawNotes(ctx, layout, pendingNotes, currentTimeMs, effectiveGreenNumberMs, activeNoteColors);
+  drawFxNotes(ctx, layout, pendingNotes, currentTimeMs, fallTimeMs, activeNoteColors);
+  drawNotes(ctx, layout, pendingNotes, currentTimeMs, fallTimeMs, activeNoteColors);
   drawJudgeLine(ctx, layout);
   keyBeams = pruneExpiredKeyBeams(keyBeams, currentTimeMs);
   drawKeyBeams(ctx, layout, keyBeams, currentTimeMs, activeNoteColors);
@@ -1104,22 +1108,13 @@ async function startPlay(): Promise<void> {
   renderLoop();
 }
 
-// 배속 입력이 바뀌면 그린넘버 입력을(그 반대도) 서로 동기화한다 — SPEC.md 6절,
-// effectiveGreenNumberMs 하나가 진짜 상태고 나머지는 그걸 보여주는 두 입력 경로.
-function syncSpeedFromInput(): void {
-  const speed = clampSpeed(Number(optionSpeedInput.value) || SPEED_MIN);
-  optionSpeedInput.value = String(speed);
-  optionGreenNumberInput.value = String(Math.round(speedToGreenNumberMs(speed, BASE_GREEN_NUMBER_MS)));
-}
-
+// 그린넘버 입력값을 정규화(step 반올림 + clamp)한다 — 이제 진짜 상태는 그린넘버 하나뿐이라
+// 예전처럼 배속과 서로 맞춰줄 다른 입력이 없다.
 function syncGreenNumberFromInput(): void {
-  const raw = Number(optionGreenNumberInput.value) || BASE_GREEN_NUMBER_MS;
-  const greenNumber = Math.min(GREEN_NUMBER_MAX_MS, Math.max(GREEN_NUMBER_MIN_MS, raw));
-  optionGreenNumberInput.value = String(Math.round(greenNumber));
-  optionSpeedInput.value = String(clampSpeed(greenNumberMsToSpeed(greenNumber, BASE_GREEN_NUMBER_MS)));
+  const raw = Number(optionGreenNumberInput.value) || DEFAULT_GREEN_NUMBER;
+  optionGreenNumberInput.value = String(clampGreenNumber(raw));
 }
 
-optionSpeedInput.addEventListener("change", syncSpeedFromInput);
 optionGreenNumberInput.addEventListener("change", syncGreenNumberFromInput);
 
 // 레인은 A/S/D 대신 1/2/3으로 표시한다 — 키보드 배열/언어(쿼티 아닌 배열 등)에 따라
@@ -1256,7 +1251,7 @@ let activePresetIndex = parseActivePresetIndex(localStorage.getItem(ACTIVE_PRESE
 function readOptionsSnapshot(): OptionsSnapshot {
   return {
     canvasWidthOption: optionCanvasWidthSelect.value as CanvasWidthOption,
-    effectiveGreenNumberMs: Number(optionGreenNumberInput.value),
+    greenNumber: Number(optionGreenNumberInput.value),
     arrangement: selectedArrangement,
     audioOffsetMs: Number(optionAudioOffsetInput.value) || 0,
     inputOffsetMs: Number(optionInputOffsetInput.value) || 0,
@@ -1272,8 +1267,8 @@ function readOptionsSnapshot(): OptionsSnapshot {
 
 function applySnapshotToInputs(snapshot: OptionsSnapshot): void {
   optionCanvasWidthSelect.value = snapshot.canvasWidthOption;
-  optionGreenNumberInput.value = String(snapshot.effectiveGreenNumberMs);
-  syncGreenNumberFromInput(); // clamp/반올림 + 배속 입력과 동기화
+  optionGreenNumberInput.value = String(snapshot.greenNumber);
+  syncGreenNumberFromInput(); // clamp/반올림
   selectedArrangement = snapshot.arrangement; // 토글 UI는 선곡 팝업에 있음 — 팝업 열 때 동기화(updateMirrorToggleLabel)
   optionAudioOffsetInput.value = String(snapshot.audioOffsetMs);
   optionInputOffsetInput.value = String(snapshot.inputOffsetMs);
@@ -1332,8 +1327,8 @@ function applyOptionsFromInputs(): void {
     judgeLineMarginBottom,
     optionScratchSideCheckbox.checked ? "left" : "right",
   );
-  syncSpeedFromInput(); // 입력값을 정규화(clamp/반올림)해서 그린넘버 입력과 최종 일치시킨다.
-  effectiveGreenNumberMs = Number(optionGreenNumberInput.value);
+  syncGreenNumberFromInput(); // 입력값을 정규화(step 반올림/clamp)한다.
+  greenNumber = Number(optionGreenNumberInput.value);
   updateSpeedDisplay();
 
   audioOffsetMs = Math.min(OFFSET_MAX_MS, Math.max(OFFSET_MIN_MS, Number(optionAudioOffsetInput.value) || 0));
