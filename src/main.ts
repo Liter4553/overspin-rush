@@ -15,7 +15,16 @@ import { computeErrorMs, displaySign, judge } from "./core/judge";
 import { advanceHoldTicks, computeTickIntervalMs, startActiveHold, type ActiveHold } from "./core/holdState";
 import { clampSpeed, greenNumberMsToSpeed, speedToGreenNumberMs } from "./core/speedOptions";
 import { applyArrangement, type Arrangement } from "./core/laneArrangement";
-import { BINDABLE_LANES, bindingsToKeymap, keymapToBindings, rebindKey, type BindableLane, type KeyBindings } from "./core/keymapOptions";
+import {
+  bindingsToKeymap,
+  createDefaultKeyBindings,
+  MOUSE_BINDING,
+  rebindKey,
+  SCRATCH_KEY_SLOTS,
+  type BindableSlot,
+  type KeyBindings,
+  type ScratchKeySlot,
+} from "./core/keymapOptions";
 import {
   applyGaugePlayHoldTick,
   applyGaugePlayJudgement,
@@ -56,6 +65,7 @@ import {
   applyScratchDirection,
   createScratchAccumulator,
   createScratchDirectionState,
+  type ScratchDirection,
 } from "./core/scratchInput";
 import { chartDurationMs, isChartComplete } from "./core/chartCompletion";
 import { computeResults, countJudgeableNotes, type GradeTimingBreakdown } from "./core/results";
@@ -105,6 +115,7 @@ import {
   SCRATCH_THRESHOLD,
   SCRATCH_THRESHOLD_MAX,
   SCRATCH_THRESHOLD_MIN,
+  type ScratchSide,
   SPEED_DECREASE_KEY,
   SPEED_INCREASE_KEY,
   SPEED_MAX,
@@ -212,9 +223,8 @@ app.innerHTML = `
     </div>
     <div class="option-row">
       <label>키 설정</label>
-      <div class="keybind-row" id="keybind-row"></div>
+      <button type="button" id="keybind-open-btn">키 설정 열기</button>
     </div>
-    <div class="keybind-error" id="keybind-error" hidden></div>
     <div class="option-row">
       <label for="option-note-skin">노트 스킨</label>
       <select id="option-note-skin">
@@ -242,6 +252,25 @@ app.innerHTML = `
     <div class="options-footer">
       <button type="button" id="option-save-preset">이 프리셋에 저장</button>
       <button type="button" id="options-close-btn">닫기</button>
+    </div>
+  </div>
+  </div>
+
+  <div class="modal-overlay" id="keybind-overlay" hidden>
+  <div class="options-panel keybind-panel">
+    <h2>키 설정</h2>
+    <div class="keybind-lanes" id="keybind-lanes"></div>
+    <div class="keybind-second-row" id="keybind-second-row">
+      <div class="keybind-fx-wrap" id="keybind-fx-wrap"></div>
+      <div class="keybind-scratch-wrap" id="keybind-scratch-wrap"></div>
+    </div>
+    <div class="keybind-error" id="keybind-error" hidden></div>
+    <div class="option-row">
+      <label for="option-scratch-side">스크래치를 왼쪽에</label>
+      <input type="checkbox" id="option-scratch-side" />
+    </div>
+    <div class="options-footer">
+      <button type="button" id="keybind-close-btn">닫기</button>
     </div>
   </div>
   </div>
@@ -353,8 +382,15 @@ const optionAudioOffsetInput = document.querySelector<HTMLInputElement>("#option
 const optionInputOffsetInput = document.querySelector<HTMLInputElement>("#option-input-offset")!;
 const optionJudgeLineInput = document.querySelector<HTMLInputElement>("#option-judge-line")!;
 const optionScratchThresholdInput = document.querySelector<HTMLInputElement>("#option-scratch-threshold")!;
-const keybindRow = document.querySelector<HTMLDivElement>("#keybind-row")!;
+const keybindOpenBtn = document.querySelector<HTMLButtonElement>("#keybind-open-btn")!;
+const keybindOverlay = document.querySelector<HTMLDivElement>("#keybind-overlay")!;
+const keybindLanesEl = document.querySelector<HTMLDivElement>("#keybind-lanes")!;
+const keybindFxWrap = document.querySelector<HTMLDivElement>("#keybind-fx-wrap")!;
+const keybindScratchWrap = document.querySelector<HTMLDivElement>("#keybind-scratch-wrap")!;
+const keybindSecondRow = document.querySelector<HTMLDivElement>("#keybind-second-row")!;
 const keybindError = document.querySelector<HTMLDivElement>("#keybind-error")!;
+const keybindCloseBtn = document.querySelector<HTMLButtonElement>("#keybind-close-btn")!;
+const optionScratchSideCheckbox = document.querySelector<HTMLInputElement>("#option-scratch-side")!;
 const optionNoteSkinSelect = document.querySelector<HTMLSelectElement>("#option-note-skin")!;
 const optionGaugeTypeSelect = document.querySelector<HTMLSelectElement>("#option-gauge-type")!;
 const optionGasRow = document.querySelector<HTMLDivElement>("#option-gas-row")!;
@@ -413,13 +449,13 @@ function buildPlayChart(baseChart: Chart, arrangement: Arrangement): Chart {
   return { ...baseChart, notes: applyArrangement(baseChart.notes, arrangement) };
 }
 
-// 선택된 캔버스 폭/판정선 위치를 실제 스타일/레이아웃에 반영한다. 옵션 화면 "시작" 클릭 시 호출.
-function applySelectedLayout(canvasWidthOption: CanvasWidthOption, judgeLineMarginBottom: number): void {
+// 선택된 캔버스 폭/판정선 위치/스크래치 사이드를 실제 스타일/레이아웃에 반영한다. 옵션 화면 "시작" 클릭 시 호출.
+function applySelectedLayout(canvasWidthOption: CanvasWidthOption, judgeLineMarginBottom: number, scratchSide: ScratchSide): void {
   canvasWidth = CANVAS_WIDTH_OPTIONS[canvasWidthOption];
   canvas.style.width = `${canvasWidth}px`;
   canvas.style.height = `${CANVAS_HEIGHT}px`;
   gaugeBarWrap.style.width = `${canvasWidth}px`;
-  layout = computeLaneLayout(canvasWidth, DEFAULT_SCRATCH_SIDE, judgeLineMarginBottom);
+  layout = computeLaneLayout(canvasWidth, scratchSide, judgeLineMarginBottom);
 }
 
 // 캔버스 비트맵 해상도를 dpr과 화면 맞춤 배율(uiScale) 둘 다 반영해서 설정한다.
@@ -511,11 +547,13 @@ let activeNoteColors: NoteColors = NOTE_SKIN_PALETTES[0];
 let scratchThresholdPx = SCRATCH_THRESHOLD;
 let activeGaugeType: GaugeType = DEFAULT_GAUGE_TYPE;
 let gasEnabled = false;
-// 키 설정(A/S/D/FX). keyBindings가 옵션 UI가 다루는 진짜 상태고, keymap은 그걸
-// resolveLaneFromKey가 바로 쓸 수 있는 형태로 변환한 파생값이다(applyOptionsFromInputs에서 갱신).
-let keyBindings: KeyBindings = keymapToBindings(DEFAULT_KEYMAP);
+// 키 설정(레인 1/2/3/FX + 스크래치 업/다운). keyBindings가 옵션 UI가 다루는 진짜 상태고,
+// keymap은 그중 레인 부분을 resolveLaneFromKey가 바로 쓸 수 있는 형태로 변환한 파생값이다
+// (applyOptionsFromInputs에서 갱신). 스크래치 업/다운은 마우스(MOUSE_BINDING)일 수도 있어
+// keymap 변환 대상이 아니고, handleKeydown에서 직접 keyBindings를 참조한다.
+let keyBindings: KeyBindings = createDefaultKeyBindings(DEFAULT_KEYMAP);
 let keymap: Record<string, NoteLane> = bindingsToKeymap(keyBindings);
-let awaitingRebindLane: BindableLane | null = null;
+let awaitingRebindSlot: BindableSlot | null = null;
 // 채보 로드 시 1회 산출되는 NORMAL 계수(a)와 현재 게이지 상태. startPlay에서 초기화된다.
 let gaugeCoefficientA = 0;
 let gaugePlayState: GaugePlayState = createGaugePlayState(DEFAULT_GAUGE_TYPE, false);
@@ -830,6 +868,17 @@ document.addEventListener("click", () => {
 });
 
 // 판정은 keydown 발생 즉시 계산한다 — rAF/프레임 타이밍과 무관 (SPEC.md 1절).
+// 마우스 움직임이든 스크래치 전용 키(스크래치 업/다운)든, 방향 하나가 정해지고 나면
+// 이후 처리(교대 규칙 + 판정)는 완전히 동일하다 — 두 입력 경로가 이 함수 하나를 공유한다.
+function applyScratchDirectionEvent(direction: ScratchDirection, inputTimeMs: number): void {
+  const dirResult = applyScratchDirection(scratchDirectionState, direction, inputTimeMs, SCRATCH_DIR_RESET_MS);
+  scratchDirectionState = dirResult.state;
+  if (!dirResult.valid) return; // 무효 입력(같은 방향 연속)은 조용히 무시, 노트 소모 없음
+
+  keyBeams = addKeyBeam(keyBeams, { lane: "scratch", startedAtMs: clock.currentTime * 1000 });
+  judgeAndApply("scratch", inputTimeMs, "scratch");
+}
+
 function handleKeydown(event: KeyboardEvent): void {
   if (event.key === PAUSE_TRIGGER_KEY) {
     void pauseGame();
@@ -845,6 +894,18 @@ function handleKeydown(event: KeyboardEvent): void {
     const nextSpeed = clampSpeed(currentSpeed + direction * SPEED_STEP);
     effectiveGreenNumberMs = speedToGreenNumberMs(nextSpeed, BASE_GREEN_NUMBER_MS);
     updateSpeedDisplay();
+    return;
+  }
+
+  // 스크래치 업/다운이 마우스가 아니라 실제 키에 배정돼 있으면(컨트롤러/마우스 없는 환경 대비),
+  // 눌리는 즉시 하나의 방향 이벤트로 취급한다 — 마우스처럼 누적/임계값이 필요 없는 이산 입력이다.
+  const normalizedKey = event.key.toLowerCase();
+  if (keyBindings.scratchUp !== MOUSE_BINDING && normalizedKey === keyBindings.scratchUp) {
+    applyScratchDirectionEvent("up", clock.toGameTime(event.timeStamp) * 1000);
+    return;
+  }
+  if (keyBindings.scratchDown !== MOUSE_BINDING && normalizedKey === keyBindings.scratchDown) {
+    applyScratchDirectionEvent("down", clock.toGameTime(event.timeStamp) * 1000);
     return;
   }
 
@@ -879,12 +940,7 @@ function handleMouseMove(event: MouseEvent): void {
   if (accResult.direction === null) return;
 
   const inputTimeMs = clock.toGameTime(event.timeStamp) * 1000;
-  const dirResult = applyScratchDirection(scratchDirectionState, accResult.direction, inputTimeMs, SCRATCH_DIR_RESET_MS);
-  scratchDirectionState = dirResult.state;
-  if (!dirResult.valid) return; // 무효 입력(같은 방향 연속)은 조용히 무시, 노트 소모 없음
-
-  keyBeams = addKeyBeam(keyBeams, { lane: "scratch", startedAtMs: clock.currentTime * 1000 });
-  judgeAndApply("scratch", inputTimeMs, "scratch");
+  applyScratchDirectionEvent(accResult.direction, inputTimeMs);
 }
 
 document.addEventListener("mousemove", handleMouseMove);
@@ -1064,46 +1120,50 @@ function syncGreenNumberFromInput(): void {
 optionSpeedInput.addEventListener("change", syncSpeedFromInput);
 optionGreenNumberInput.addEventListener("change", syncGreenNumberFromInput);
 
-const KEYBIND_LANE_LABEL: Readonly<Record<BindableLane, string>> = { 0: "A", 1: "S", 2: "D", fx: "FX" };
+// 레인은 A/S/D 대신 1/2/3으로 표시한다 — 키보드 배열/언어(쿼티 아닌 배열 등)에 따라
+// 문자 라벨이 실제 물리적 위치와 혼동될 수 있어서, 숫자로 통일해 어떤 배열에서도 헷갈리지 않게 한다.
+const KEYBIND_LANE_LABEL: Readonly<Record<0 | 1 | 2, string>> = { 0: "1", 1: "2", 2: "3" };
 const RESERVED_KEYS: readonly string[] = [PAUSE_TRIGGER_KEY, SPEED_DECREASE_KEY, SPEED_INCREASE_KEY];
 
 function displayKeyLabel(key: string): string {
+  if (key === MOUSE_BINDING) return "마우스";
   return key === " " ? "SPACE" : key.toUpperCase();
 }
 
-function renderKeybindButtons(): void {
-  keybindRow.innerHTML = BINDABLE_LANES.map((lane) => {
-    const waiting = awaitingRebindLane === lane;
-    return `<button type="button" class="keybind-btn${waiting ? " waiting" : ""}" data-lane="${lane}">
-      <span class="keybind-lane-label">${KEYBIND_LANE_LABEL[lane]}</span>
-      <span class="keybind-key-label">${waiting ? "입력 대기…" : displayKeyLabel(keyBindings[lane])}</span>
-    </button>`;
-  }).join("");
-}
-
-function laneFromDataset(value: string | undefined): BindableLane | null {
-  if (value === "fx") return "fx";
+function slotFromDataset(value: string | undefined): BindableSlot | null {
+  if (value === "fx" || value === "scratchUp" || value === "scratchDown") return value;
   if (value === "0" || value === "1" || value === "2") return Number(value) as 0 | 1 | 2;
   return null;
 }
 
-keybindRow.addEventListener("click", (event) => {
-  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".keybind-btn");
-  const lane = btn === null ? null : laneFromDataset(btn.dataset.lane);
-  if (lane === null) return;
-  awaitingRebindLane = lane;
+function keybindButtonHtml(slot: BindableSlot, label: string): string {
+  const waiting = awaitingRebindSlot === slot;
+  return `<button type="button" class="keybind-btn${waiting ? " waiting" : ""}" data-slot="${slot}">
+    <span class="keybind-lane-label">${label}</span>
+    <span class="keybind-key-label">${waiting ? "입력 대기…" : displayKeyLabel(keyBindings[slot])}</span>
+  </button>`;
+}
+
+function updateScratchSideLayout(): void {
+  keybindSecondRow.classList.toggle("scratch-left", optionScratchSideCheckbox.checked);
+}
+
+function renderKeybindButtons(): void {
+  keybindLanesEl.innerHTML = ([0, 1, 2] as const).map((lane) => keybindButtonHtml(lane, KEYBIND_LANE_LABEL[lane])).join("");
+  keybindFxWrap.innerHTML = keybindButtonHtml("fx", "FX");
+  keybindScratchWrap.innerHTML = keybindButtonHtml("scratchUp", "SC ↑") + keybindButtonHtml("scratchDown", "SC ↓");
+  updateScratchSideLayout();
+}
+
+function startAwaitingRebind(slot: BindableSlot): void {
+  awaitingRebindSlot = slot;
   keybindError.hidden = true;
   renderKeybindButtons();
-});
+}
 
-// 재배정 대기 중일 때만 다음 keydown 하나를 가로챈다. 다른 keydown 리스너(게임 입력,
-// 스페이스바 옵션 토글 등)는 각자 awaitingRebindLane을 확인해 대기 중엔 반응하지 않는다.
-window.addEventListener("keydown", (event) => {
-  if (awaitingRebindLane === null) return;
-  event.preventDefault();
-  const lane = awaitingRebindLane;
-  awaitingRebindLane = null;
-  const result = rebindKey(keyBindings, lane, event.key, RESERVED_KEYS);
+function finishRebind(slot: BindableSlot, rawKey: string): void {
+  awaitingRebindSlot = null;
+  const result = rebindKey(keyBindings, slot, rawKey, RESERVED_KEYS);
   if (result.ok) {
     keyBindings = result.bindings;
     keybindError.hidden = true;
@@ -1112,9 +1172,56 @@ window.addEventListener("keydown", (event) => {
     keybindError.hidden = false;
   }
   renderKeybindButtons();
+}
+
+keybindLanesEl.addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".keybind-btn");
+  const slot = btn === null ? null : slotFromDataset(btn.dataset.slot);
+  if (slot !== null) startAwaitingRebind(slot);
+});
+keybindFxWrap.addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".keybind-btn");
+  if (btn !== null) startAwaitingRebind("fx");
+});
+keybindScratchWrap.addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".keybind-btn");
+  const slot = btn === null ? null : slotFromDataset(btn.dataset.slot);
+  if (slot !== null) startAwaitingRebind(slot);
 });
 
-renderKeybindButtons();
+// 재배정 대기 중일 때만 다음 keydown 하나를 가로챈다. 다른 keydown 리스너(게임 입력,
+// 스페이스바 옵션 토글 등)는 각자 awaitingRebindSlot을 확인해 대기 중엔 반응하지 않는다.
+window.addEventListener("keydown", (event) => {
+  if (awaitingRebindSlot === null) return;
+  event.preventDefault();
+  finishRebind(awaitingRebindSlot, event.key);
+});
+
+// 스크래치 슬롯 재배정 대기 중에 마우스를 위/아래로 움직이면 "마우스로 인식"을 그 자리에서
+// 선택한 것으로 간주한다(원래의 마우스 스크래치 방식으로 되돌리는 유일한 방법이기도 하다).
+// 사소한 떨림까지 반응하지 않도록 최소 이동량을 둔다. 레인/FX는 마우스로 배정할 수 없으므로 무시.
+window.addEventListener("mousemove", (event) => {
+  if (awaitingRebindSlot === null) return;
+  if (!SCRATCH_KEY_SLOTS.includes(awaitingRebindSlot as ScratchKeySlot)) return;
+  if (Math.abs(event.movementY) < 3) return;
+  finishRebind(awaitingRebindSlot, MOUSE_BINDING);
+});
+
+keybindOpenBtn.addEventListener("click", () => {
+  renderKeybindButtons();
+  keybindOverlay.hidden = false;
+});
+
+function closeKeybindOverlay(): void {
+  awaitingRebindSlot = null;
+  keybindOverlay.hidden = true;
+}
+
+keybindCloseBtn.addEventListener("click", closeKeybindOverlay);
+keybindOverlay.addEventListener("click", (event) => {
+  if (event.target === keybindOverlay) closeKeybindOverlay();
+});
+optionScratchSideCheckbox.addEventListener("change", updateScratchSideLayout);
 
 // GAS는 서바이벌형(HARD/CHALLENGE)에서만 의미가 있다. NORMAL을 고르면 숨긴다.
 function updateGasRowVisibility(): void {
@@ -1154,6 +1261,7 @@ function readOptionsSnapshot(): OptionsSnapshot {
     judgeLineMarginBottom: Number(optionJudgeLineInput.value) || JUDGE_LINE_MARGIN_BOTTOM,
     noteSkinId: optionNoteSkinSelect.value,
     scratchThreshold: Number(optionScratchThresholdInput.value) || SCRATCH_THRESHOLD,
+    scratchSide: optionScratchSideCheckbox.checked ? "left" : "right",
     keyBindings: { ...keyBindings },
     gaugeType: optionGaugeTypeSelect.value as GaugeType,
     gasEnabled: optionGasEnabledCheckbox.checked,
@@ -1170,8 +1278,9 @@ function applySnapshotToInputs(snapshot: OptionsSnapshot): void {
   optionJudgeLineInput.value = String(snapshot.judgeLineMarginBottom);
   optionNoteSkinSelect.value = snapshot.noteSkinId;
   optionScratchThresholdInput.value = String(snapshot.scratchThreshold);
+  optionScratchSideCheckbox.checked = snapshot.scratchSide === "left";
   keyBindings = { ...snapshot.keyBindings }; // 키 설정은 DOM input이 아니라 이 상태 자체가 원본이다.
-  awaitingRebindLane = null;
+  awaitingRebindSlot = null;
   renderKeybindButtons();
   optionGaugeTypeSelect.value = snapshot.gaugeType;
   optionGasEnabledCheckbox.checked = snapshot.gasEnabled;
@@ -1216,7 +1325,11 @@ function applyOptionsFromInputs(): void {
     JUDGE_LINE_MARGIN_MAX,
     Math.max(JUDGE_LINE_MARGIN_MIN, Number(optionJudgeLineInput.value) || JUDGE_LINE_MARGIN_BOTTOM),
   );
-  applySelectedLayout(optionCanvasWidthSelect.value as CanvasWidthOption, judgeLineMarginBottom);
+  applySelectedLayout(
+    optionCanvasWidthSelect.value as CanvasWidthOption,
+    judgeLineMarginBottom,
+    optionScratchSideCheckbox.checked ? "left" : "right",
+  );
   syncSpeedFromInput(); // 입력값을 정규화(clamp/반올림)해서 그린넘버 입력과 최종 일치시킨다.
   effectiveGreenNumberMs = Number(optionGreenNumberInput.value);
   updateSpeedDisplay();
@@ -1257,7 +1370,7 @@ optionsOverlay.addEventListener("click", (event) => {
 // 키 재배정 대기 중(스페이스바로 FX를 새로 배정하려는 경우 등)에는 옵션 토글로 새지 않게 막는다.
 window.addEventListener("keydown", (event) => {
   if (screen !== "songSelect") return;
-  if (awaitingRebindLane !== null) return;
+  if (awaitingRebindSlot !== null) return;
   if (event.key !== " ") return;
   event.preventDefault();
   if (optionsOverlay.hidden) openOptionsOverlay();

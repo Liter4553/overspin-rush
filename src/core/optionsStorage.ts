@@ -1,7 +1,7 @@
 // 옵션 프리셋 직렬화/역직렬화. 실제 localStorage 접근은 main.ts의 얇은 어댑터가 담당하고,
 // 여기는 순수 함수로만 구성해 테스트 가능하게 한다(SPEC.md 10절).
 import type { Arrangement } from "./laneArrangement";
-import { BINDABLE_LANES, keymapToBindings, type KeyBindings } from "./keymapOptions";
+import { ALL_BINDABLE_SLOTS, createDefaultKeyBindings, type KeyBindings } from "./keymapOptions";
 import {
   AUDIO_OFFSET_MS,
   BASE_GREEN_NUMBER_MS,
@@ -10,10 +10,12 @@ import {
   DEFAULT_GAUGE_TYPE,
   DEFAULT_KEYMAP,
   DEFAULT_NOTE_SKIN_ID,
+  DEFAULT_SCRATCH_SIDE,
   type GaugeType,
   INPUT_OFFSET_MS,
   JUDGE_LINE_MARGIN_BOTTOM,
   PRESET_COUNT,
+  type ScratchSide,
   SCRATCH_THRESHOLD,
 } from "../config";
 
@@ -26,6 +28,7 @@ export interface OptionsSnapshot {
   judgeLineMarginBottom: number;
   noteSkinId: string;
   scratchThreshold: number;
+  scratchSide: ScratchSide;
   keyBindings: KeyBindings;
   gaugeType: GaugeType;
   gasEnabled: boolean;
@@ -41,7 +44,8 @@ export function createDefaultSnapshot(): OptionsSnapshot {
     judgeLineMarginBottom: JUDGE_LINE_MARGIN_BOTTOM,
     noteSkinId: DEFAULT_NOTE_SKIN_ID,
     scratchThreshold: SCRATCH_THRESHOLD,
-    keyBindings: keymapToBindings(DEFAULT_KEYMAP),
+    scratchSide: DEFAULT_SCRATCH_SIDE,
+    keyBindings: createDefaultKeyBindings(DEFAULT_KEYMAP),
     gaugeType: DEFAULT_GAUGE_TYPE,
     gasEnabled: false,
   };
@@ -57,7 +61,7 @@ export function createEmptyPresetSlots(): PresetSlots {
 function isValidKeyBindings(value: unknown): value is KeyBindings {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
-  return BINDABLE_LANES.every((lane) => typeof v[lane] === "string" && v[lane] !== "");
+  return ALL_BINDABLE_SLOTS.every((slot) => typeof v[slot] === "string" && v[slot] !== "");
 }
 
 function isValidSnapshot(value: unknown): value is OptionsSnapshot {
@@ -72,6 +76,7 @@ function isValidSnapshot(value: unknown): value is OptionsSnapshot {
     typeof v.judgeLineMarginBottom === "number" &&
     typeof v.noteSkinId === "string" &&
     typeof v.scratchThreshold === "number" &&
+    (v.scratchSide === "left" || v.scratchSide === "right") &&
     isValidKeyBindings(v.keyBindings) &&
     (v.gaugeType === "normal" || v.gaugeType === "hard" || v.gaugeType === "challenge") &&
     typeof v.gasEnabled === "boolean"

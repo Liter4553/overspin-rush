@@ -209,7 +209,43 @@ h1 {
   width: auto;
 }
 
-.keybind-row {
+.keybind-panel {
+  width: min(360px, 90vw);
+  gap: 14px;
+}
+
+/* 1/2/3 레인 버튼 한 줄. */
+.keybind-lanes {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  width: 100%;
+}
+
+/* FX(넓게) + 스크래치 업/다운 박스가 나란히. 스크래치 사이드 체크박스에 따라
+   row-reverse로 좌우를 바꿔서, 실제 게임 화면에서 스크래치가 있는 쪽과 일치시킨다. */
+.keybind-second-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.keybind-second-row.scratch-left {
+  flex-direction: row-reverse;
+}
+
+.keybind-fx-wrap {
+  flex: 1;
+}
+
+.keybind-fx-wrap .keybind-btn {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.keybind-scratch-wrap {
+  flex: none;
   display: flex;
   gap: 6px;
 }
