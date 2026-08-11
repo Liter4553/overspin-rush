@@ -1,23 +1,25 @@
-// 그린넘버(IIDX식: "그린넘버 = BPM x 배속") 순수 변환 로직.
-// 진짜 상태는 그린넘버 하나뿐이고, 배속과 낙하 시간(ms)은 매 순간의 BPM으로부터
-// 그때그때 계산되는 파생값이다 — BPM이 달라져도 체감 낙하 속도가 그대로 유지된다.
-import { GREEN_NUMBER_MAX, GREEN_NUMBER_MIN, GREEN_NUMBER_STEP } from "../config";
+// "노트 속도"(작을수록 빠름) 옵션 순수 로직. 곡 시작(또는 실시간 변경) 시점의 BPM을
+// 기준으로 낙하 시간을 한 번만 계산해 고정하고, 이후 곡 중간에 BPM이 바뀌면 그 비율만큼
+// 스크롤 속도에 그대로 반영한다(그린넘버처럼 BPM 변화를 상쇄해 항상 똑같이 보이게 하지 않는다).
+import { NOTE_SPEED_MAX, NOTE_SPEED_MIN, NOTE_SPEED_STEP } from "../config";
 
-export function speedMultiplierForBpm(greenNumber: number, bpm: number): number {
-  if (bpm <= 0) return 0;
-  return greenNumber / bpm;
+// 노트 속도와 "그 시점" BPM으로부터 낙하 시간(ms)을 계산한다. 곡 시작/실시간 변경
+// 시점에 한 번 호출해서 기준값(고정)을 만드는 용도 — 노트 속도가 작을수록 짧게(빠르게) 나온다.
+export function fallTimeMsForNoteSpeed(noteSpeed: number, bpm: number, baseGreenNumberMs: number): number {
+  if (bpm <= 0) return baseGreenNumberMs;
+  return (baseGreenNumberMs * noteSpeed) / bpm;
 }
 
-// 렌더링(noteY)이 바로 쓸 수 있는 낙하 시간(ms). 배속이 0 이하로 나오는 예외적인
-// BPM(0 이하)에서는 baseGreenNumberMs를 그대로 폴백한다.
-export function fallTimeMsForBpm(greenNumber: number, bpm: number, baseGreenNumberMs: number): number {
-  const speed = speedMultiplierForBpm(greenNumber, bpm);
-  if (speed <= 0) return baseGreenNumberMs;
-  return baseGreenNumberMs / speed;
+// 고정해둔 기준 낙하 시간을, 기준 BPM 대비 지금 BPM의 비율만큼 그대로 조정한다.
+// BPM이 느려지면(currentBpm < referenceBpm) 낙하 시간이 늘어나(더 느리게 보임),
+// 빨라지면 줄어든다(더 빠르게 보임) — 배속 자체는 재계산하지 않는다.
+export function scaleFallTimeMsForCurrentBpm(fallTimeMsAtReference: number, referenceBpm: number, currentBpm: number): number {
+  if (referenceBpm <= 0 || currentBpm <= 0) return fallTimeMsAtReference;
+  return fallTimeMsAtReference * (referenceBpm / currentBpm);
 }
 
-// GREEN_NUMBER_STEP 단위로 반올림하고 GREEN_NUMBER_MIN~MAX 범위로 clamp한다.
-export function clampGreenNumber(greenNumber: number): number {
-  const stepped = Math.round(greenNumber / GREEN_NUMBER_STEP) * GREEN_NUMBER_STEP;
-  return Math.min(GREEN_NUMBER_MAX, Math.max(GREEN_NUMBER_MIN, stepped));
+// NOTE_SPEED_STEP 단위로 반올림하고 NOTE_SPEED_MIN~MAX 범위로 clamp한다.
+export function clampNoteSpeed(noteSpeed: number): number {
+  const stepped = Math.round(noteSpeed / NOTE_SPEED_STEP) * NOTE_SPEED_STEP;
+  return Math.min(NOTE_SPEED_MAX, Math.max(NOTE_SPEED_MIN, stepped));
 }

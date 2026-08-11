@@ -34,22 +34,23 @@ export const JUDGE_LINE_MARGIN_BOTTOM = 120;
 export const JUDGE_LINE_MARGIN_MIN = 40;
 export const JUDGE_LINE_MARGIN_MAX = 400;
 
-// --- 스크롤(그린넘버, 2026-08-11 결정) ---
-// IIDX식 그린넘버: "그린넘버 = BPM x 배속"이 되도록, 배속을 곡(또는 구간)의 현재 BPM에
-// 반비례해 매 순간 내부적으로 자동 계산한다. 사용자가 조절하는 건 그린넘버 하나뿐이라
-// BPM이 다른 곡/구간이어도 노트가 화면에서 항상 같은 체감 속도로 떨어진다. 배속이라는
-// 개념은 더 이상 사용자에게 노출되지 않는다 — 순수 내부 계산값.
-// baseGreenNumberMs: 배속 1.0x(그린넘버 == BPM)일 때의 낙하 시간(ms) 기준값.
+// --- 스크롤(노트 속도, 2026-08-11 결정) ---
+// "노트 속도" 값(작을수록 빠름)과 그 시점의 BPM으로 낙하 시간(ms)을 계산하는데, 이 계산은
+// 곡 시작 시점(또는 플레이 중 실시간 변경 시점)에 딱 한 번만 이뤄지고 고정된다. 이후 곡
+// 도중 BPM이 바뀌면(예: 곡 중간에 느려지는 구간) 그 계산을 다시 하는 게 아니라, 처음 고정한
+// 배속 그대로 바뀐 BPM에 비례해서 스크롤 속도에 반영한다 — BPM이 느려지면 스크롤도 같이
+// 느려진다(그린넘버처럼 BPM 변화를 상쇄해서 항상 똑같아 보이게 만들지 않는다).
+// baseGreenNumberMs: 배속 1.0x(노트 속도 == 그 시점 BPM)일 때의 낙하 시간(ms) 기준값.
 export const BASE_GREEN_NUMBER_MS = 800;
-export const DEFAULT_GREEN_NUMBER = 150; // IIDX 기본값과 동일. 더미 채보(BPM 150)에서는 예전 배속 1.0x와 동일하게 보인다.
-export const GREEN_NUMBER_MIN = 50;
-export const GREEN_NUMBER_MAX = 1500;
-export const GREEN_NUMBER_STEP = 5;
-// BPM/그린넘버 조합이 극단적이어도 낙하 시간이 너무 짧거나(순간이동처럼 보임) 너무
+export const DEFAULT_NOTE_SPEED = 150; // 더미 채보(BPM 150)에서는 예전 배속 1.0x와 동일하게 보인다.
+export const NOTE_SPEED_MIN = 50;
+export const NOTE_SPEED_MAX = 1500;
+export const NOTE_SPEED_STEP = 5;
+// BPM/노트 속도 조합이 극단적이어도 낙하 시간이 너무 짧거나(순간이동처럼 보임) 너무
 // 길어지지(거의 안 움직임) 않도록 렌더링에 실제 쓰이는 낙하 시간(ms) 자체도 clamp한다.
 export const FALL_TIME_MIN_MS = 80;
 export const FALL_TIME_MAX_MS = 1600;
-// 플레이 중 실시간 그린넘버 변경 단축키(텐키 아닌 숫자키 행). 브라우저 기본 단축키와
+// 플레이 중 실시간 노트 속도 변경 단축키(텐키 아닌 숫자키 행). 브라우저 기본 단축키와
 // 겹치는 펑션키(F3/F4 등) 대신 선택.
 export const SPEED_DECREASE_KEY = "1";
 export const SPEED_INCREASE_KEY = "2";

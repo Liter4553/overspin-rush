@@ -7,8 +7,8 @@ import {
   type CanvasWidthOption,
   DEFAULT_CANVAS_WIDTH_OPTION,
   DEFAULT_GAUGE_TYPE,
-  DEFAULT_GREEN_NUMBER,
   DEFAULT_KEYMAP,
+  DEFAULT_NOTE_SPEED,
   DEFAULT_NOTE_SKIN_ID,
   DEFAULT_SCRATCH_SIDE,
   type GaugeType,
@@ -21,7 +21,7 @@ import {
 
 export interface OptionsSnapshot {
   canvasWidthOption: CanvasWidthOption;
-  greenNumber: number;
+  noteSpeed: number;
   arrangement: Arrangement;
   audioOffsetMs: number;
   inputOffsetMs: number;
@@ -37,7 +37,7 @@ export interface OptionsSnapshot {
 export function createDefaultSnapshot(): OptionsSnapshot {
   return {
     canvasWidthOption: DEFAULT_CANVAS_WIDTH_OPTION,
-    greenNumber: DEFAULT_GREEN_NUMBER,
+    noteSpeed: DEFAULT_NOTE_SPEED,
     arrangement: "normal",
     audioOffsetMs: AUDIO_OFFSET_MS,
     inputOffsetMs: INPUT_OFFSET_MS,
@@ -69,7 +69,7 @@ function isValidSnapshot(value: unknown): value is OptionsSnapshot {
   const v = value as Record<string, unknown>;
   return (
     (v.canvasWidthOption === "narrow" || v.canvasWidthOption === "normal" || v.canvasWidthOption === "wide") &&
-    typeof v.greenNumber === "number" &&
+    typeof v.noteSpeed === "number" &&
     (v.arrangement === "normal" || v.arrangement === "mirror") &&
     typeof v.audioOffsetMs === "number" &&
     typeof v.inputOffsetMs === "number" &&
