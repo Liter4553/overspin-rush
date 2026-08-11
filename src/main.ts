@@ -259,9 +259,11 @@ app.innerHTML = `
   <div class="modal-overlay" id="keybind-overlay" hidden>
   <div class="options-panel keybind-panel">
     <h2>키 설정</h2>
-    <div class="keybind-lanes" id="keybind-lanes"></div>
-    <div class="keybind-second-row" id="keybind-second-row">
-      <div class="keybind-fx-wrap" id="keybind-fx-wrap"></div>
+    <div class="keybind-layout" id="keybind-layout">
+      <div class="keybind-notes-block">
+        <div class="keybind-lanes" id="keybind-lanes"></div>
+        <div class="keybind-fx-wrap" id="keybind-fx-wrap"></div>
+      </div>
       <div class="keybind-scratch-wrap" id="keybind-scratch-wrap"></div>
     </div>
     <div class="keybind-error" id="keybind-error" hidden></div>
@@ -387,7 +389,7 @@ const keybindOverlay = document.querySelector<HTMLDivElement>("#keybind-overlay"
 const keybindLanesEl = document.querySelector<HTMLDivElement>("#keybind-lanes")!;
 const keybindFxWrap = document.querySelector<HTMLDivElement>("#keybind-fx-wrap")!;
 const keybindScratchWrap = document.querySelector<HTMLDivElement>("#keybind-scratch-wrap")!;
-const keybindSecondRow = document.querySelector<HTMLDivElement>("#keybind-second-row")!;
+const keybindLayout = document.querySelector<HTMLDivElement>("#keybind-layout")!;
 const keybindError = document.querySelector<HTMLDivElement>("#keybind-error")!;
 const keybindCloseBtn = document.querySelector<HTMLButtonElement>("#keybind-close-btn")!;
 const optionScratchSideCheckbox = document.querySelector<HTMLInputElement>("#option-scratch-side")!;
@@ -1145,13 +1147,13 @@ function keybindButtonHtml(slot: BindableSlot, label: string): string {
 }
 
 function updateScratchSideLayout(): void {
-  keybindSecondRow.classList.toggle("scratch-left", optionScratchSideCheckbox.checked);
+  keybindLayout.classList.toggle("scratch-left", optionScratchSideCheckbox.checked);
 }
 
 function renderKeybindButtons(): void {
   keybindLanesEl.innerHTML = ([0, 1, 2] as const).map((lane) => keybindButtonHtml(lane, KEYBIND_LANE_LABEL[lane])).join("");
   keybindFxWrap.innerHTML = keybindButtonHtml("fx", "FX");
-  keybindScratchWrap.innerHTML = keybindButtonHtml("scratchUp", "SC ↑") + keybindButtonHtml("scratchDown", "SC ↓");
+  keybindScratchWrap.innerHTML = keybindButtonHtml("scratchUp", "↑") + keybindButtonHtml("scratchDown", "↓");
   updateScratchSideLayout();
 }
 
