@@ -389,6 +389,73 @@ h1 {
   color: #0b0d12;
 }
 
+/* 임포트한 곡이 이 난이도 채보를 갖고 있지 않을 때(zip에 easy/normal/hard 일부만 있는 경우) */
+.level-block-missing {
+  cursor: default;
+  pointer-events: none;
+  opacity: 0.35;
+  background: #2a2c38;
+  color: #8b93a7;
+}
+
+/* 곡 목록 맨 끝에 붙는 "+ 채보 추가"/새로고침 한 줄. song-item과 높이를 맞춰 톤을 맞춘다. */
+.song-import-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.song-import-btn {
+  flex: 1;
+  padding: 14px;
+  border: 1px dashed #3a3d4a;
+  border-radius: 6px;
+  background: transparent;
+  color: #8b93a7;
+  font-family: inherit;
+  font-weight: bold;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.song-import-btn:hover {
+  border-color: #7dd3fc;
+  color: #7dd3fc;
+}
+
+.song-refresh-btn {
+  flex: none;
+  width: 48px;
+  border: 1px solid #2a2c38;
+  border-radius: 6px;
+  background: #12161f;
+  color: #8b93a7;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.song-refresh-btn:hover {
+  border-color: #7dd3fc;
+  color: #7dd3fc;
+  transform: rotate(90deg);
+}
+
+.song-import-error {
+  margin: 0 20px 12px;
+  padding: 8px 12px;
+  border: 1px solid #fa5252;
+  border-radius: 6px;
+  background: #fa525220;
+  color: #ff8787;
+  font-size: 0.85rem;
+}
+
+.song-import-error[hidden] {
+  display: none;
+}
+
 .song-popup {
   position: absolute;
   left: 0;

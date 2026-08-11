@@ -60,6 +60,8 @@ import { chartDurationMs, isChartComplete } from "./core/chartCompletion";
 import { computeResults, countJudgeableNotes, type GradeTimingBreakdown } from "./core/results";
 import { computeFitScale } from "./render/viewportScale";
 import { DIFFICULTIES, DIFFICULTY_LABEL, SONG_LIST, type Difficulty, type SongEntry } from "./chart/songList";
+import { loadImportedSongEntries } from "./import/importedSongEntries";
+import { importSongFromZip } from "./import/importSong";
 import type { Chart, NoteLane } from "./chart/types";
 import {
   ACTIVE_PRESET_STORAGE_KEY,
@@ -141,6 +143,8 @@ app.innerHTML = `
   <div id="song-select-view">
     <h2>SELECT</h2>
     <div class="song-list" id="song-list"></div>
+    <div class="song-import-error" id="song-import-error" hidden></div>
+    <input type="file" id="import-zip-input" accept=".zip,application/zip" hidden />
     <div class="song-popup" id="song-popup">
       <div class="song-popup-inner">
         <div class="song-popup-jacket" id="song-popup-jacket"></div>
@@ -323,6 +327,8 @@ const scoreDisplay = document.querySelector<HTMLSpanElement>("#score-display")!;
 const gradePanel = document.querySelector<HTMLDivElement>("#grade-panel")!;
 const songSelectView = document.querySelector<HTMLDivElement>("#song-select-view")!;
 const songListEl = document.querySelector<HTMLDivElement>("#song-list")!;
+const songImportError = document.querySelector<HTMLDivElement>("#song-import-error")!;
+const importZipInput = document.querySelector<HTMLInputElement>("#import-zip-input")!;
 const songPopup = document.querySelector<HTMLDivElement>("#song-popup")!;
 const songPopupJacket = document.querySelector<HTMLDivElement>("#song-popup-jacket")!;
 const songPopupTitle = document.querySelector<HTMLDivElement>("#song-popup-title")!;
@@ -383,6 +389,14 @@ const dpr = window.devicePixelRatio || 1;
 let layout = computeLaneLayout(canvasWidth, DEFAULT_SCRATCH_SIDE, JUDGE_LINE_MARGIN_BOTTOM);
 // 선곡 팝업에서 "곡 시작"을 누른 시점에 선택된 곡의 채보로 교체된다.
 let chart: Chart = parseChart(dummyChartRaw);
+// 선택된 곡의 실제 음원(zip 임포트). 더미 곡처럼 없으면 무음(메트로놈)으로 재생된다.
+let currentSongAudioBlob: Blob | undefined;
+let currentAudioSource: AudioBufferSourceNode | null = null;
+// IndexedDB에서 불러온 임포트 곡 목록. 더미 3곡(SONG_LIST)은 항상 고정, 이 목록은 새로고침/임포트 시 갱신된다.
+let importedSongEntries: SongEntry[] = [];
+function allSongs(): SongEntry[] {
+  return [...SONG_LIST, ...importedSongEntries];
+}
 // 실제 플레이에 쓰이는 채보. 원본 chart는 절대 변형하지 않고, 배치 옵션을 적용한
 // 새 노트 배열로 매 플레이 시작 시 다시 만든다(SPEC.md 6절).
 let activeChart: Chart = chart;
@@ -609,6 +623,7 @@ const CLEAR_GRADE_BADGE_TEXT: Readonly<Record<ClearGrade, string>> = {
 // 되지 않는다 — gauge.ts의 relay 전환 로직 참고). 셔터가 다 내려온 뒤 결과 화면으로 넘어간다.
 function triggerFailure(): void {
   phase = "results"; // 남은 입력/자동미스 처리를 즉시 막는다(showResults와 동일한 방식)
+  stopCurrentAudio();
   failShutter.hidden = false;
   failShutter.classList.add("dropping");
 
@@ -622,6 +637,7 @@ function triggerFailure(): void {
 
 function showResults(): void {
   phase = "results";
+  stopCurrentAudio();
   const summary = computeResults(activeChart, gameState, noteTracker);
 
   const finalGauge = currentGauge(gaugePlayState);
@@ -935,7 +951,51 @@ function renderLoop(): void {
   requestAnimationFrame(renderLoop);
 }
 
+function stopCurrentAudio(): void {
+  if (currentAudioSource === null) return;
+  try {
+    currentAudioSource.stop();
+  } catch {
+    // 이미 멈춘 소스에 다시 stop()을 호출하면 예외가 나는데, 곡 종료/실패/재시작 등
+    // 여러 경로에서 중복 호출될 수 있어 조용히 무시한다.
+  }
+  currentAudioSource = null;
+}
+
+// chart.offset(ms, SPEC.md 7절 "오디오 시작과 0박 사이 보정")만큼 오디오 앞부분을 건너뛰거나
+// (양수) 늦게 시작해서(음수) 게임 클럭 0(clock.start() 시점)이 note.time=0과 맞도록 스케줄한다.
+// startedAtCtxTime은 clock.startedAt을 직접 노출하지 않고도 "ctx.currentTime - clock.currentTime"로
+// 역산한다 — 호출 시점이 clock.start() 직후가 아니어도(오디오 디코딩 시간만큼 늦어져도) 정확하다.
+function scheduleAudioBuffer(audioBuffer: AudioBuffer, offsetMs: number): void {
+  const source = clock.audioContext.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(clock.audioContext.destination);
+
+  const startedAtCtxTime = clock.audioContext.currentTime - clock.currentTime;
+  const now = clock.audioContext.currentTime;
+  let startAtCtxTime = startedAtCtxTime + Math.max(0, -offsetMs / 1000);
+  let bufferOffsetSec = Math.max(0, offsetMs / 1000);
+  if (startAtCtxTime < now) {
+    // 디코딩이 오래 걸려 예정 시각을 이미 지났다면, 그만큼 버퍼 오프셋을 더 건너뛰어 맞춘다.
+    bufferOffsetSec += now - startAtCtxTime;
+    startAtCtxTime = now;
+  }
+  source.start(startAtCtxTime, bufferOffsetSec);
+  currentAudioSource = source;
+}
+
 async function startPlay(): Promise<void> {
+  stopCurrentAudio();
+  const audioBufferPromise = currentSongAudioBlob
+    ? currentSongAudioBlob
+        .arrayBuffer()
+        .then((buf) => clock.audioContext.decodeAudioData(buf))
+        .catch((error) => {
+          console.error("음원 디코딩에 실패해 무음으로 재생합니다:", error);
+          return null;
+        })
+    : null;
+
   activeChart = buildPlayChart(chart, selectedArrangement);
   songDurationMs = chartDurationMs(activeChart, AUTO_MISS_WINDOW_MS);
   noteTracker = createNoteTracker(activeChart);
@@ -968,6 +1028,8 @@ async function startPlay(): Promise<void> {
   canvas.requestPointerLock();
 
   await clock.start();
+  const audioBuffer = audioBufferPromise ? await audioBufferPromise : null;
+  if (audioBuffer !== null) scheduleAudioBuffer(audioBuffer, chart.offset);
   renderLoop();
 }
 
@@ -1132,13 +1194,24 @@ window.addEventListener("keydown", (event) => {
 // --- 선곡 화면 ---
 
 function findSong(id: string): SongEntry {
-  const song = SONG_LIST.find((s) => s.id === id);
+  const song = allSongs().find((s) => s.id === id);
   if (song === undefined) throw new Error(`선곡 목록에 없는 곡 id: ${id}`);
   return song;
 }
 
-function jacketGradient(song: SongEntry): string {
-  return `linear-gradient(135deg, ${song.jacketColors[0]}, ${song.jacketColors[1]})`;
+function jacketBackgroundCss(song: SongEntry): string {
+  return song.jacket.type === "gradient"
+    ? `linear-gradient(135deg, ${song.jacket.colors[0]}, ${song.jacket.colors[1]})`
+    : `center/cover url('${song.jacket.objectUrl}')`;
+}
+
+// 임포트한 곡은 zip에 있던 난이도만 있을 수 있다. preferred가 없으면(예: HARD만
+// 있는 곡에서 selectedDifficulty가 EASY) 그 곡에 실제로 존재하는 첫 난이도로 대체한다.
+function resolveDifficulty(song: SongEntry, preferred: Difficulty): Difficulty {
+  if (song.levels[preferred] !== undefined) return preferred;
+  const fallback = DIFFICULTIES.find((d) => song.levels[d] !== undefined);
+  if (fallback === undefined) throw new Error(`곡에 사용 가능한 난이도가 없습니다: ${song.id}`);
+  return fallback;
 }
 
 // 지금 팝업이 열려 있는 곡의, 지금 선택된 난이도 블록만 진하게 강조한다.
@@ -1156,30 +1229,43 @@ function clearMarkHtml(songId: string): string {
 }
 
 function renderSongList(): void {
-  songListEl.innerHTML = SONG_LIST.map(
-    (song) => `
+  const songsHtml = allSongs()
+    .map(
+      (song) => `
       <button type="button" class="song-item" data-song-id="${song.id}">
-        <div class="song-item-jacket" style="background:${jacketGradient(song)}"></div>
+        <div class="song-item-jacket" style="background:${jacketBackgroundCss(song)}"></div>
         <div class="song-item-meta">
           <div class="song-item-title">${song.title}</div>
           <div class="song-item-artist">${song.artist}</div>
         </div>
         <div class="song-item-levels">
           ${clearMarkHtml(song.id)}
-          ${DIFFICULTIES.map(
-            (d) =>
-              `<div class="level-block level-${d}${isActiveLevelBlock(song.id, d) ? " active" : ""}" data-difficulty="${d}"><span class="level-block-label">${DIFFICULTY_LABEL[d]}</span><span class="level-block-value">${song.levels[d]}</span></div>`,
-          ).join("")}
+          ${DIFFICULTIES.map((d) => {
+            const level = song.levels[d];
+            if (level === undefined) {
+              return `<div class="level-block level-${d} level-block-missing"><span class="level-block-label">${DIFFICULTY_LABEL[d]}</span><span class="level-block-value">-</span></div>`;
+            }
+            return `<div class="level-block level-${d}${isActiveLevelBlock(song.id, d) ? " active" : ""}" data-difficulty="${d}"><span class="level-block-label">${DIFFICULTY_LABEL[d]}</span><span class="level-block-value">${level}</span></div>`;
+          }).join("")}
         </div>
       </button>`,
-  ).join("");
+    )
+    .join("");
+
+  songListEl.innerHTML = `${songsHtml}
+    <div class="song-import-row">
+      <button type="button" class="song-import-btn" id="song-import-btn">+ 채보 추가</button>
+      <button type="button" class="song-refresh-btn" id="song-refresh-btn" title="곡 목록 새로고침">⟳</button>
+    </div>`;
 }
 
 function renderPopupDifficultyButtons(song: SongEntry): void {
-  songPopupDifficultyEl.innerHTML = DIFFICULTIES.map(
-    (d) =>
-      `<button type="button" class="difficulty-btn diff-${d}${d === selectedDifficulty ? " active" : ""}" data-difficulty="${d}">${DIFFICULTY_LABEL[d]} ${song.levels[d]}</button>`,
-  ).join("");
+  songPopupDifficultyEl.innerHTML = DIFFICULTIES.filter((d) => song.levels[d] !== undefined)
+    .map(
+      (d) =>
+        `<button type="button" class="difficulty-btn diff-${d}${d === selectedDifficulty ? " active" : ""}" data-difficulty="${d}">${DIFFICULTY_LABEL[d]} ${song.levels[d]}</button>`,
+    )
+    .join("");
 }
 
 // 미러 옵션 토글(팝업). "정배/미러"보다 포괄적으로 읽히도록 ON/OFF 표기로 통일.
@@ -1203,7 +1289,7 @@ function renderSongPopupStatus(song: SongEntry): void {
 
   // 정확도는 results.ts의 accuracyPercent와 같은 공식(score / 이론치 * 100)을 그대로
   // 재사용한다 — 별도로 저장하지 않아도 점수와 채보(이론치)만으로 그대로 복원된다.
-  const theoreticalMax = countJudgeableNotes(parseChart(song.chartRaw)) * 4;
+  const theoreticalMax = countJudgeableNotes(parseChart(song.chartRawByDifficulty[selectedDifficulty])) * 4;
   const accuracyPercent = theoreticalMax === 0 ? 0 : (highScore / theoreticalMax) * 100;
   songPopupAccuracyValue.textContent = `${accuracyPercent.toFixed(2)}%`;
 
@@ -1220,7 +1306,8 @@ function renderSongPopupStatus(song: SongEntry): void {
 function openSongPopup(songId: string): void {
   selectedSongId = songId;
   const song = findSong(songId);
-  songPopupJacket.style.background = jacketGradient(song);
+  selectedDifficulty = resolveDifficulty(song, selectedDifficulty);
+  songPopupJacket.style.background = jacketBackgroundCss(song);
   songPopupTitle.textContent = song.title;
   songPopupArtist.textContent = song.artist;
   renderPopupDifficultyButtons(song);
@@ -1236,13 +1323,47 @@ function closeSongPopup(): void {
   renderSongList(); // 팝업이 닫히면 강조도 같이 사라진다
 }
 
+async function refreshSongList(): Promise<void> {
+  importedSongEntries = await loadImportedSongEntries();
+  renderSongList();
+}
+
+importZipInput.addEventListener("change", async () => {
+  const file = importZipInput.files?.[0];
+  importZipInput.value = ""; // 같은 파일을 다시 골라도 change가 또 발생하도록 비워둔다.
+  if (!file) return;
+  songImportError.hidden = true;
+  songImportError.textContent = "";
+  try {
+    await importSongFromZip(file);
+    await refreshSongList();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    songImportError.textContent = `채보 임포트 실패: ${message}`;
+    songImportError.hidden = false;
+  }
+});
+
 // 리스트에서 특정 난이도 블록을 직접 클릭하면 그 난이도가 선택된 채로 팝업이 뜬다.
+// "+ 채보 추가"/새로고침 버튼도 이 리스트 안에서 매 renderSongList마다 다시 그려지므로
+// (개별 리스너 대신) 여기서 위임 처리한다.
 songListEl.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
+
+  if (target.closest("#song-import-btn")) {
+    songImportError.hidden = true;
+    importZipInput.click();
+    return;
+  }
+  if (target.closest("#song-refresh-btn")) {
+    void refreshSongList();
+    return;
+  }
+
   const itemBtn = target.closest<HTMLButtonElement>(".song-item");
   if (itemBtn === null) return;
   const levelBlock = target.closest<HTMLElement>(".level-block");
-  if (levelBlock !== null) {
+  if (levelBlock !== null && levelBlock.dataset.difficulty) {
     selectedDifficulty = levelBlock.dataset.difficulty as Difficulty;
   }
   openSongPopup(itemBtn.dataset.songId!);
@@ -1279,14 +1400,16 @@ document.addEventListener("click", (event) => {
   closeSongPopup();
 });
 
-// "곡 시작": 선택된 곡의 채보로 교체하고 게임 화면으로 넘어간다. 난이도는 지금은
-// 표시/선택만 되고 실제로 다른 채보를 불러오지는 않는다(테스트용 채보 하나뿐 — songList.ts 참고).
+// "곡 시작": 선택된 곡의 (선택된 난이도) 채보로 교체하고 게임 화면으로 넘어간다.
+// 임포트한 곡은 audioBlob이 있어 실제로 재생되고, 더미 곡은 audioBlob이 없어 지금까지처럼 무음이다.
 songPopupStartBtn.addEventListener("click", async () => {
   if (selectedSongId === null) return;
   songPopupStartBtn.disabled = true;
   songPopupStartBtn.textContent = "실행 중";
 
-  chart = parseChart(findSong(selectedSongId).chartRaw);
+  const song = findSong(selectedSongId);
+  chart = parseChart(song.chartRawByDifficulty[selectedDifficulty]);
+  currentSongAudioBlob = song.audioBlob;
 
   // 게임 화면이 실제로 보이는 지금(zoom=1) 자연 크기를 측정해야 fitToViewport가 정확하다.
   screen = "gameplay";
@@ -1317,5 +1440,6 @@ restartBtn.addEventListener("click", async () => {
   await startPlay();
 });
 
-renderSongList();
+renderSongList(); // 더미 3곡 먼저 즉시 표시하고, 임포트 곡은 IndexedDB 조회가 끝나는 대로 이어붙인다.
+void refreshSongList();
 applyOptionsFromInputs(); // 페이지 로드 시 불러온 프리셋 값을 런타임 상태에도 반영

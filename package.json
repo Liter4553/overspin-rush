@@ -10,8 +10,12 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "fake-indexeddb": "^6.2.5",
     "typescript": "~6.0.2",
     "vite": "^8.2.0",
     "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1"
   }
 }

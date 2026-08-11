@@ -204,6 +204,68 @@ JSON. 스키마를 먼저 정의하고 타입으로 강제할 것.
 - 테스트용 더미 채보 1개를 생성해서 음원 없이도 동작 검증이 가능하게 할 것 (메트로놈 클릭으로 대체).
 - BMS/VOS 등 외부 포맷 임포트는 이번 범위 밖.
 
+## 7-1. 실제 채보/음원 임포트 (2026-08-11 결정)
+
+위 JSON은 게임 내부 스키마이고, 사용자가 실제로 만들어 오는 채보는 `.pattern`이라는 독자 텍스트
+확장자를 쓴다. BPM에 비례한 박자 단위로 노트를 배치해야 재생 환경에 따른 ms 오차(싱크 밀림)가
+없다 — 싱크 조절은 옵션 화면의 오디오/입력 오프셋으로 이미 존재하므로, 채보 자체는 항상 정박 기준.
+
+### .pattern 텍스트 포맷
+
+섹션 기반(INI 스타일). 틱 해상도는 마디(4/4)당 16틱(16분음표 단위)으로 고정 — 3레인 원핸드
+게임에 필요한 정밀도로는 충분하고, 파서가 정수 연산만으로 끝나 단순하다.
+
+```
+[meta]
+title=...
+artist=...
+audio=audio.ogg
+offset=0        # ms, 오디오 파일 자체의 시작과 0박 사이 보정(BPM과 무관, JSON의 offset과 동일 의미)
+level=12
+
+[bpm]
+1:0=150         # 마디:틱=BPM. 1마디 1틱부터 시작해야 한다
+5:8=180         # 5마디 8틱째부터 180으로 변경
+
+[notes]
+1:0 0 tap
+1:4 1 tap
+2:0 fx hold 8   # 마디:틱 레인 타입 [duration틱]
+3:0 scratch tap
+```
+
+마디:틱 → ms 변환은 [barTick.ts](src/chart/barTick.ts)가, `.pattern` 텍스트 파싱 및 위 JSON
+스키마로의 변환은 [patternParser.ts](src/chart/patternParser.ts)가 담당한다(최종 필드 검증은
+`parseChart`에 위임해 JSON 채보와 규칙을 공유).
+
+### zip 임포트
+
+선곡 화면 곡 목록 맨 끝의 "+ 채보 추가" 타일로 zip 파일을 선택하면 임포트된다. zip 내부 파일명은
+자유이며 확장자로 자동 식별한다.
+
+- `.pattern`: 난이도별 채보. 파일명에 `easy`/`normal`/`hard` 중 하나가 포함되어야 한다
+  (예: `chart_easy.pattern`). zip 하나 = 곡 하나 = 난이도별 파일 여러 개(전부 필수는 아님).
+- `.ogg`: 음원. 실제로 쓰이는 파일은 각 `.pattern`의 `audio=` 필드로 매칭된다(대소문자 무시).
+- `.png`/`.jpg`/`.jpeg`: 자켓. 여러 개면 첫 번째만 사용, 없으면 회색 그라디언트로 대체.
+- 난이도별 채보의 title/artist/audio는 서로 일치해야 한다.
+
+임포트 파이프라인은 [zipExtract.ts](src/import/zipExtract.ts)(압축 해제) →
+[classifyImportFiles.ts](src/import/classifyImportFiles.ts)(확장자 분류) →
+[importSong.ts](src/import/importSong.ts)(파싱/검증 오케스트레이션) →
+[songStorage.ts](src/import/songStorage.ts)(IndexedDB 저장) 순으로 이어진다.
+저장은 원본 `.pattern` 텍스트와 음원/자켓 blob 그대로이고, 실제 파싱은 선곡 화면에 표시할
+때마다 [importedSongEntries.ts](src/import/importedSongEntries.ts)가 수행한다(저장 형식과
+파서 버전을 분리). 곡 목록 새로고침 버튼(⟳)으로 언제든 다시 불러올 수 있다. 삭제 기능은
+범위 밖(추후 결정).
+
+### 실제 오디오 재생
+
+임포트한 곡은 게임 시작 시 `AudioContext.decodeAudioData`로 음원을 디코딩해
+`AudioBufferSourceNode`로 재생한다(더미 채보처럼 음원이 없으면 지금까지처럼 무음).
+게임 클럭(`AudioClock`)이 시작되는 시점이 note.time=0이 되도록, `offset`만큼 오디오 앞부분을
+건너뛰거나(양수) 늦게 시작해서(음수) 스케줄한다. 일시정지/재개는 `AudioContext.suspend`/
+`resume`을 그대로 타므로 음원도 자동으로 같이 멈추고 이어진다.
+
 ## 8. 구현 순서 (마일스톤)
 
 각 단계 끝에서 실행 가능한 상태로 만들고, 무엇을 확인하면 되는지 알려준 뒤 멈춰. 다음 단계로 넘어가기 전에 내 확인을 받아.
@@ -218,6 +280,7 @@ JSON. 스키마를 먼저 정의하고 타입으로 강제할 것.
 8. **옵션 시스템** — 속도, 정배/미러, 오프셋/판정선 위치/노트 색, 저장/복원. (RANDOM 계열, SUDDEN+/HIDDEN+/LIFT, 오토 스크래치는 6절 결정에 따라 범위 밖.)
 9. **폴리싱** — 노트 히트 이펙트, 판정 텍스트 애니메이션, 키빔, 게이지, 일시정지.
    - **게이지**는 아래 8-1절 사양대로 단계별 구현(9-1 참조): ① 핵심 로직 ② 옵션 연동 ③ 게임플레이 연결 ④ HUD 렌더링 ⑤ 실패 처리 ⑥ 클리어 판정 + 결과.
+10. **실제 채보/음원 임포트** — 7-1절 사양대로 단계별 구현: ① 마디:틱→ms 변환 ② `.pattern` 파서 ③ zip 해제/분류 ④ IndexedDB 저장 ⑤ 임포트 오케스트레이션 ⑥ 선곡 화면 UI(+ 채보 추가/새로고침) ⑦ 실제 오디오 재생.
 
 ## 8-1. 게이지 시스템 (2026-08-09 결정)
 
