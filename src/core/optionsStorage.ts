@@ -1,12 +1,14 @@
 // 옵션 프리셋 직렬화/역직렬화. 실제 localStorage 접근은 main.ts의 얇은 어댑터가 담당하고,
 // 여기는 순수 함수로만 구성해 테스트 가능하게 한다(SPEC.md 10절).
 import type { Arrangement } from "./laneArrangement";
+import { BINDABLE_LANES, keymapToBindings, type KeyBindings } from "./keymapOptions";
 import {
   AUDIO_OFFSET_MS,
   BASE_GREEN_NUMBER_MS,
   type CanvasWidthOption,
   DEFAULT_CANVAS_WIDTH_OPTION,
   DEFAULT_GAUGE_TYPE,
+  DEFAULT_KEYMAP,
   DEFAULT_NOTE_SKIN_ID,
   type GaugeType,
   INPUT_OFFSET_MS,
@@ -24,6 +26,7 @@ export interface OptionsSnapshot {
   judgeLineMarginBottom: number;
   noteSkinId: string;
   scratchThreshold: number;
+  keyBindings: KeyBindings;
   gaugeType: GaugeType;
   gasEnabled: boolean;
 }
@@ -38,6 +41,7 @@ export function createDefaultSnapshot(): OptionsSnapshot {
     judgeLineMarginBottom: JUDGE_LINE_MARGIN_BOTTOM,
     noteSkinId: DEFAULT_NOTE_SKIN_ID,
     scratchThreshold: SCRATCH_THRESHOLD,
+    keyBindings: keymapToBindings(DEFAULT_KEYMAP),
     gaugeType: DEFAULT_GAUGE_TYPE,
     gasEnabled: false,
   };
@@ -48,6 +52,12 @@ export type PresetSlots = (OptionsSnapshot | null)[];
 
 export function createEmptyPresetSlots(): PresetSlots {
   return Array.from({ length: PRESET_COUNT }, () => null);
+}
+
+function isValidKeyBindings(value: unknown): value is KeyBindings {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return BINDABLE_LANES.every((lane) => typeof v[lane] === "string" && v[lane] !== "");
 }
 
 function isValidSnapshot(value: unknown): value is OptionsSnapshot {
@@ -62,6 +72,7 @@ function isValidSnapshot(value: unknown): value is OptionsSnapshot {
     typeof v.judgeLineMarginBottom === "number" &&
     typeof v.noteSkinId === "string" &&
     typeof v.scratchThreshold === "number" &&
+    isValidKeyBindings(v.keyBindings) &&
     (v.gaugeType === "normal" || v.gaugeType === "hard" || v.gaugeType === "challenge") &&
     typeof v.gasEnabled === "boolean"
   );

@@ -15,6 +15,7 @@ import { computeErrorMs, displaySign, judge } from "./core/judge";
 import { advanceHoldTicks, computeTickIntervalMs, startActiveHold, type ActiveHold } from "./core/holdState";
 import { clampSpeed, greenNumberMsToSpeed, speedToGreenNumberMs } from "./core/speedOptions";
 import { applyArrangement, type Arrangement } from "./core/laneArrangement";
+import { BINDABLE_LANES, bindingsToKeymap, keymapToBindings, rebindKey, type BindableLane, type KeyBindings } from "./core/keymapOptions";
 import {
   applyGaugePlayHoldTick,
   applyGaugePlayJudgement,
@@ -210,6 +211,11 @@ app.innerHTML = `
       <input type="number" id="option-scratch-threshold" min="${SCRATCH_THRESHOLD_MIN}" max="${SCRATCH_THRESHOLD_MAX}" value="${SCRATCH_THRESHOLD}" />
     </div>
     <div class="option-row">
+      <label>키 설정</label>
+      <div class="keybind-row" id="keybind-row"></div>
+    </div>
+    <div class="keybind-error" id="keybind-error" hidden></div>
+    <div class="option-row">
       <label for="option-note-skin">노트 스킨</label>
       <select id="option-note-skin">
         ${NOTE_SKIN_PALETTES.map(
@@ -347,6 +353,8 @@ const optionAudioOffsetInput = document.querySelector<HTMLInputElement>("#option
 const optionInputOffsetInput = document.querySelector<HTMLInputElement>("#option-input-offset")!;
 const optionJudgeLineInput = document.querySelector<HTMLInputElement>("#option-judge-line")!;
 const optionScratchThresholdInput = document.querySelector<HTMLInputElement>("#option-scratch-threshold")!;
+const keybindRow = document.querySelector<HTMLDivElement>("#keybind-row")!;
+const keybindError = document.querySelector<HTMLDivElement>("#keybind-error")!;
 const optionNoteSkinSelect = document.querySelector<HTMLSelectElement>("#option-note-skin")!;
 const optionGaugeTypeSelect = document.querySelector<HTMLSelectElement>("#option-gauge-type")!;
 const optionGasRow = document.querySelector<HTMLDivElement>("#option-gas-row")!;
@@ -503,6 +511,11 @@ let activeNoteColors: NoteColors = NOTE_SKIN_PALETTES[0];
 let scratchThresholdPx = SCRATCH_THRESHOLD;
 let activeGaugeType: GaugeType = DEFAULT_GAUGE_TYPE;
 let gasEnabled = false;
+// 키 설정(A/S/D/FX). keyBindings가 옵션 UI가 다루는 진짜 상태고, keymap은 그걸
+// resolveLaneFromKey가 바로 쓸 수 있는 형태로 변환한 파생값이다(applyOptionsFromInputs에서 갱신).
+let keyBindings: KeyBindings = keymapToBindings(DEFAULT_KEYMAP);
+let keymap: Record<string, NoteLane> = bindingsToKeymap(keyBindings);
+let awaitingRebindLane: BindableLane | null = null;
 // 채보 로드 시 1회 산출되는 NORMAL 계수(a)와 현재 게이지 상태. startPlay에서 초기화된다.
 let gaugeCoefficientA = 0;
 let gaugePlayState: GaugePlayState = createGaugePlayState(DEFAULT_GAUGE_TYPE, false);
@@ -835,7 +848,7 @@ function handleKeydown(event: KeyboardEvent): void {
     return;
   }
 
-  const lane = resolveLaneFromKey(event.key, DEFAULT_KEYMAP);
+  const lane = resolveLaneFromKey(event.key, keymap);
   if (lane === null) return;
 
   keyBeams = addKeyBeam(keyBeams, { lane, startedAtMs: clock.currentTime * 1000 });
@@ -848,7 +861,7 @@ window.addEventListener("keydown", handleKeydown);
 // 키를 떼는 순간 그 레인의 활성 홀드를 맵에서 제거한다 — 이후 틱은 다시 발생하지
 // 않는다(다시 눌러도 이어지지 않음, SPEC.md 3절). MISS 판정은 별도로 없다.
 function handleKeyup(event: KeyboardEvent): void {
-  const lane = resolveLaneFromKey(event.key, DEFAULT_KEYMAP);
+  const lane = resolveLaneFromKey(event.key, keymap);
   if (lane === null) return;
   activeHolds.delete(lane);
 }
@@ -1051,6 +1064,58 @@ function syncGreenNumberFromInput(): void {
 optionSpeedInput.addEventListener("change", syncSpeedFromInput);
 optionGreenNumberInput.addEventListener("change", syncGreenNumberFromInput);
 
+const KEYBIND_LANE_LABEL: Readonly<Record<BindableLane, string>> = { 0: "A", 1: "S", 2: "D", fx: "FX" };
+const RESERVED_KEYS: readonly string[] = [PAUSE_TRIGGER_KEY, SPEED_DECREASE_KEY, SPEED_INCREASE_KEY];
+
+function displayKeyLabel(key: string): string {
+  return key === " " ? "SPACE" : key.toUpperCase();
+}
+
+function renderKeybindButtons(): void {
+  keybindRow.innerHTML = BINDABLE_LANES.map((lane) => {
+    const waiting = awaitingRebindLane === lane;
+    return `<button type="button" class="keybind-btn${waiting ? " waiting" : ""}" data-lane="${lane}">
+      <span class="keybind-lane-label">${KEYBIND_LANE_LABEL[lane]}</span>
+      <span class="keybind-key-label">${waiting ? "입력 대기…" : displayKeyLabel(keyBindings[lane])}</span>
+    </button>`;
+  }).join("");
+}
+
+function laneFromDataset(value: string | undefined): BindableLane | null {
+  if (value === "fx") return "fx";
+  if (value === "0" || value === "1" || value === "2") return Number(value) as 0 | 1 | 2;
+  return null;
+}
+
+keybindRow.addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".keybind-btn");
+  const lane = btn === null ? null : laneFromDataset(btn.dataset.lane);
+  if (lane === null) return;
+  awaitingRebindLane = lane;
+  keybindError.hidden = true;
+  renderKeybindButtons();
+});
+
+// 재배정 대기 중일 때만 다음 keydown 하나를 가로챈다. 다른 keydown 리스너(게임 입력,
+// 스페이스바 옵션 토글 등)는 각자 awaitingRebindLane을 확인해 대기 중엔 반응하지 않는다.
+window.addEventListener("keydown", (event) => {
+  if (awaitingRebindLane === null) return;
+  event.preventDefault();
+  const lane = awaitingRebindLane;
+  awaitingRebindLane = null;
+  const result = rebindKey(keyBindings, lane, event.key, RESERVED_KEYS);
+  if (result.ok) {
+    keyBindings = result.bindings;
+    keybindError.hidden = true;
+  } else {
+    keybindError.textContent = result.reason ?? "";
+    keybindError.hidden = false;
+  }
+  renderKeybindButtons();
+});
+
+renderKeybindButtons();
+
 // GAS는 서바이벌형(HARD/CHALLENGE)에서만 의미가 있다. NORMAL을 고르면 숨긴다.
 function updateGasRowVisibility(): void {
   const gaugeType = optionGaugeTypeSelect.value as GaugeType;
@@ -1089,6 +1154,7 @@ function readOptionsSnapshot(): OptionsSnapshot {
     judgeLineMarginBottom: Number(optionJudgeLineInput.value) || JUDGE_LINE_MARGIN_BOTTOM,
     noteSkinId: optionNoteSkinSelect.value,
     scratchThreshold: Number(optionScratchThresholdInput.value) || SCRATCH_THRESHOLD,
+    keyBindings: { ...keyBindings },
     gaugeType: optionGaugeTypeSelect.value as GaugeType,
     gasEnabled: optionGasEnabledCheckbox.checked,
   };
@@ -1104,6 +1170,9 @@ function applySnapshotToInputs(snapshot: OptionsSnapshot): void {
   optionJudgeLineInput.value = String(snapshot.judgeLineMarginBottom);
   optionNoteSkinSelect.value = snapshot.noteSkinId;
   optionScratchThresholdInput.value = String(snapshot.scratchThreshold);
+  keyBindings = { ...snapshot.keyBindings }; // 키 설정은 DOM input이 아니라 이 상태 자체가 원본이다.
+  awaitingRebindLane = null;
+  renderKeybindButtons();
   optionGaugeTypeSelect.value = snapshot.gaugeType;
   optionGasEnabledCheckbox.checked = snapshot.gasEnabled;
   updateGasRowVisibility();
@@ -1162,6 +1231,8 @@ function applyOptionsFromInputs(): void {
     Math.max(SCRATCH_THRESHOLD_MIN, Number(optionScratchThresholdInput.value) || SCRATCH_THRESHOLD),
   );
 
+  keymap = bindingsToKeymap(keyBindings);
+
   activeGaugeType = optionGaugeTypeSelect.value as GaugeType;
   gasEnabled = optionGasEnabledCheckbox.checked;
 }
@@ -1183,8 +1254,10 @@ optionsOverlay.addEventListener("click", (event) => {
 });
 
 // 선곡 화면에서 스페이스바를 누르면 옵션이 뜨고, 다시 누르면 닫힌다(SPEC.md 6절).
+// 키 재배정 대기 중(스페이스바로 FX를 새로 배정하려는 경우 등)에는 옵션 토글로 새지 않게 막는다.
 window.addEventListener("keydown", (event) => {
   if (screen !== "songSelect") return;
+  if (awaitingRebindLane !== null) return;
   if (event.key !== " ") return;
   event.preventDefault();
   if (optionsOverlay.hidden) openOptionsOverlay();
