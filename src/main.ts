@@ -74,12 +74,21 @@ import { DIFFICULTIES, DIFFICULTY_LABEL, SONG_LIST, type Difficulty, type SongEn
 import { loadImportedSongEntries } from "./import/importedSongEntries";
 import { deleteImportedSong } from "./import/songStorage";
 import { importSongFromZip } from "./import/importSong";
+import {
+  generateCalibrationBeatScheduleMs,
+  suggestAudioOffsetMs,
+  suggestInputOffsetMs,
+  summarizeCalibrationTest,
+  type CalibrationTestResult,
+} from "./core/calibration";
+import { calibrationIndicatorProgress, drawCalibrationBeatIndicator, isCalibrationBeatFlash } from "./render/calibrationVisual";
 import type { Chart, NoteLane } from "./chart/types";
 import {
   ACTIVE_PRESET_STORAGE_KEY,
   AUDIO_OFFSET_MS,
   AUTO_MISS_WINDOW_MS,
   BASE_GREEN_NUMBER_MS,
+  CALIBRATION_BPM,
   DEFAULT_BPM,
   CANVAS_HEIGHT,
   type CanvasWidthOption,
@@ -213,6 +222,10 @@ app.innerHTML = `
       <input type="number" id="option-input-offset" min="${OFFSET_MIN_MS}" max="${OFFSET_MAX_MS}" value="${INPUT_OFFSET_MS}" />
     </div>
     <div class="option-row">
+      <label>오프셋 자동 보정</label>
+      <button type="button" id="calibration-open-btn">자동 보정 열기</button>
+    </div>
+    <div class="option-row">
       <label for="option-judge-line">판정선 위치(px)</label>
       <input type="number" id="option-judge-line" min="${JUDGE_LINE_MARGIN_MIN}" max="${JUDGE_LINE_MARGIN_MAX}" value="${JUDGE_LINE_MARGIN_BOTTOM}" />
     </div>
@@ -272,6 +285,35 @@ app.innerHTML = `
     </div>
     <div class="options-footer">
       <button type="button" id="keybind-close-btn">닫기</button>
+    </div>
+  </div>
+  </div>
+
+  <div class="modal-overlay" id="calibration-overlay" hidden>
+  <div class="options-panel calibration-panel">
+    <h2>오프셋 자동 보정</h2>
+    <div class="calibration-intro" id="calibration-intro">
+      <p>스페이스 키로 두 가지 짧은 테스트를 진행합니다.</p>
+      <p>1) 소리 없이 화면만 보고 정확한 타이밍에 입력</p>
+      <p>2) 쿵짝 드럼 소리를 들으며 박자에 맞춰 입력</p>
+      <button type="button" id="calibration-start-btn">시작</button>
+    </div>
+    <div class="calibration-run" id="calibration-run" hidden>
+      <div class="calibration-stage-label" id="calibration-stage-label"></div>
+      <canvas id="calibration-canvas" width="200" height="200"></canvas>
+      <div class="calibration-countdown" id="calibration-countdown"></div>
+    </div>
+    <div class="calibration-result" id="calibration-result" hidden>
+      <div class="option-row"><label>입력 오프셋</label><span id="calibration-result-input"></span></div>
+      <div class="option-row"><label>오디오 오프셋</label><span id="calibration-result-audio"></span></div>
+      <div class="calibration-result-warning" id="calibration-result-warning" hidden></div>
+    </div>
+    <div class="options-footer" id="calibration-footer-result" hidden>
+      <button type="button" id="calibration-retry-btn">다시 시도</button>
+      <button type="button" id="calibration-apply-btn">적용</button>
+    </div>
+    <div class="options-footer">
+      <button type="button" id="calibration-close-btn">취소</button>
     </div>
   </div>
   </div>
@@ -393,6 +435,23 @@ const keybindScratchWrap = document.querySelector<HTMLDivElement>("#keybind-scra
 const keybindLayout = document.querySelector<HTMLDivElement>("#keybind-layout")!;
 const keybindError = document.querySelector<HTMLDivElement>("#keybind-error")!;
 const keybindCloseBtn = document.querySelector<HTMLButtonElement>("#keybind-close-btn")!;
+const calibrationOpenBtn = document.querySelector<HTMLButtonElement>("#calibration-open-btn")!;
+const calibrationOverlay = document.querySelector<HTMLDivElement>("#calibration-overlay")!;
+const calibrationIntro = document.querySelector<HTMLDivElement>("#calibration-intro")!;
+const calibrationStartBtn = document.querySelector<HTMLButtonElement>("#calibration-start-btn")!;
+const calibrationRun = document.querySelector<HTMLDivElement>("#calibration-run")!;
+const calibrationStageLabel = document.querySelector<HTMLDivElement>("#calibration-stage-label")!;
+const calibrationCanvas = document.querySelector<HTMLCanvasElement>("#calibration-canvas")!;
+const calibrationCtx = calibrationCanvas.getContext("2d")!;
+const calibrationCountdownEl = document.querySelector<HTMLDivElement>("#calibration-countdown")!;
+const calibrationResult = document.querySelector<HTMLDivElement>("#calibration-result")!;
+const calibrationResultInput = document.querySelector<HTMLSpanElement>("#calibration-result-input")!;
+const calibrationResultAudio = document.querySelector<HTMLSpanElement>("#calibration-result-audio")!;
+const calibrationResultWarning = document.querySelector<HTMLDivElement>("#calibration-result-warning")!;
+const calibrationFooterResult = document.querySelector<HTMLDivElement>("#calibration-footer-result")!;
+const calibrationRetryBtn = document.querySelector<HTMLButtonElement>("#calibration-retry-btn")!;
+const calibrationApplyBtn = document.querySelector<HTMLButtonElement>("#calibration-apply-btn")!;
+const calibrationCloseBtn = document.querySelector<HTMLButtonElement>("#calibration-close-btn")!;
 const optionScratchSideCheckbox = document.querySelector<HTMLInputElement>("#option-scratch-side")!;
 const optionNoteSkinSelect = document.querySelector<HTMLSelectElement>("#option-note-skin")!;
 const optionGaugeTypeSelect = document.querySelector<HTMLSelectElement>("#option-gauge-type")!;
@@ -1274,6 +1333,240 @@ keybindOverlay.addEventListener("click", (event) => {
 });
 optionScratchSideCheckbox.addEventListener("change", updateScratchSideLayout);
 
+// --- 오프셋 자동 보정 마법사 (SPEC.md 6절) ---
+// 캘리브레이션 전용 키는 리매핑과 무관하게 항상 스페이스로 고정한다(모든 키보드 배열에서
+// 위치가 동일해 테스트가 일관됨).
+const CALIBRATION_KEY = " ";
+const CALIBRATION_BEAT_INTERVAL_MS = 60000 / CALIBRATION_BPM;
+const CALIBRATION_COUNTDOWN_STEPS = ["3", "2", "1", "시작!"] as const;
+const CALIBRATION_COUNTDOWN_STEP_MS = 500;
+const CALIBRATION_BEAT_FLASH_WINDOW_MS = 60;
+
+type CalibrationStage = "visual" | "audio";
+
+let calibrationRunToken = 0; // 재시도/취소 시 진행 중이던 비동기 루프를 무효화하는 토큰
+let calibrationSuggestedInputOffsetMs: number | null = null;
+let calibrationSuggestedAudioOffsetMs: number | null = null;
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// clock.currentTime(초)과 동일한 원리로, 임의의 게임 시간(ms)에 대응하는
+// AudioContext.currentTime을 역산한다(scheduleAudioBuffer와 동일한 방식).
+function calibrationCtxTimeForGameMs(clockRef: AudioClock, gameTimeMs: number): number {
+  const startedAtCtxTime = clockRef.audioContext.currentTime - clockRef.currentTime;
+  return startedAtCtxTime + gameTimeMs / 1000;
+}
+
+function scheduleCalibrationKick(ctx: AudioContext, atCtxTime: number): void {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(150, atCtxTime);
+  osc.frequency.exponentialRampToValueAtTime(50, atCtxTime + 0.12);
+  gain.gain.setValueAtTime(0.9, atCtxTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, atCtxTime + 0.15);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(atCtxTime);
+  osc.stop(atCtxTime + 0.16);
+}
+
+function scheduleCalibrationSnare(ctx: AudioContext, atCtxTime: number): void {
+  const bufferSize = Math.floor(ctx.sampleRate * 0.12);
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+  const noise = ctx.createBufferSource();
+  noise.buffer = buffer;
+  const bandpass = ctx.createBiquadFilter();
+  bandpass.type = "bandpass";
+  bandpass.frequency.value = 1800;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.7, atCtxTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, atCtxTime + 0.12);
+
+  noise.connect(bandpass);
+  bandpass.connect(gain);
+  gain.connect(ctx.destination);
+  noise.start(atCtxTime);
+  noise.stop(atCtxTime + 0.13);
+}
+
+// 짝수 박(1,3번째...)은 쿵(킥), 홀수 박(2,4번째...)은 짝(스네어) — "쿵짝쿵짝" 패턴.
+// 동기화된 시각 신호는 의도적으로 넣지 않는다(오디오 지연만 순수하게 측정하기 위해).
+function scheduleCalibrationDrumPattern(clockRef: AudioClock, beatScheduleMs: readonly number[]): void {
+  const ctx = clockRef.audioContext;
+  beatScheduleMs.forEach((beatMs, i) => {
+    const atCtxTime = calibrationCtxTimeForGameMs(clockRef, beatMs);
+    if (i % 2 === 0) scheduleCalibrationKick(ctx, atCtxTime);
+    else scheduleCalibrationSnare(ctx, atCtxTime);
+  });
+}
+
+async function runCalibrationCountdown(token: number): Promise<boolean> {
+  for (const step of CALIBRATION_COUNTDOWN_STEPS) {
+    if (token !== calibrationRunToken) return false;
+    calibrationCountdownEl.textContent = step;
+    await wait(CALIBRATION_COUNTDOWN_STEP_MS);
+  }
+  if (token !== calibrationRunToken) return false;
+  calibrationCountdownEl.textContent = "";
+  return true;
+}
+
+function nearestBeatMs(beatScheduleMs: readonly number[], nowMs: number): number {
+  return beatScheduleMs.reduce((a, b) => (Math.abs(b - nowMs) < Math.abs(a - nowMs) ? b : a));
+}
+
+async function runCalibrationStage(
+  token: number,
+  clockRef: AudioClock,
+  stage: CalibrationStage,
+): Promise<CalibrationTestResult | null> {
+  calibrationStageLabel.textContent =
+    stage === "visual" ? "1/2 시각 테스트 (소리 없음)" : "2/2 오디오 테스트 (소리 있음)";
+  calibrationCtx.clearRect(0, 0, calibrationCanvas.width, calibrationCanvas.height);
+
+  const countdownOk = await runCalibrationCountdown(token);
+  if (!countdownOk) return null;
+
+  const stageStartMs = clockRef.currentTime * 1000;
+  const beatScheduleMs = generateCalibrationBeatScheduleMs(stageStartMs);
+  const stageEndMs = beatScheduleMs[beatScheduleMs.length - 1] + CALIBRATION_BEAT_INTERVAL_MS;
+
+  if (stage === "audio") {
+    scheduleCalibrationDrumPattern(clockRef, beatScheduleMs);
+  }
+
+  const pressTimesMs: number[] = [];
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (event.repeat) return;
+    if (event.key !== CALIBRATION_KEY) return;
+    event.preventDefault();
+    pressTimesMs.push(clockRef.toGameTime(event.timeStamp) * 1000);
+  };
+  window.addEventListener("keydown", onKeyDown);
+
+  await new Promise<void>((resolve) => {
+    function frame(): void {
+      if (token !== calibrationRunToken) {
+        resolve();
+        return;
+      }
+      const nowMs = clockRef.currentTime * 1000;
+      if (stage === "visual") {
+        const nextBeat = beatScheduleMs.find((b) => b >= nowMs) ?? beatScheduleMs[beatScheduleMs.length - 1];
+        const progress = calibrationIndicatorProgress(nowMs, nextBeat, CALIBRATION_BEAT_INTERVAL_MS);
+        const flash = isCalibrationBeatFlash(nowMs, nearestBeatMs(beatScheduleMs, nowMs), CALIBRATION_BEAT_FLASH_WINDOW_MS);
+        drawCalibrationBeatIndicator(calibrationCtx, calibrationCanvas.width, progress, flash);
+      }
+      if (nowMs >= stageEndMs) {
+        resolve();
+        return;
+      }
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  });
+
+  window.removeEventListener("keydown", onKeyDown);
+  if (token !== calibrationRunToken) return null;
+
+  return summarizeCalibrationTest(pressTimesMs, beatScheduleMs);
+}
+
+async function runCalibration(): Promise<void> {
+  const token = calibrationRunToken;
+  calibrationIntro.hidden = true;
+  calibrationResult.hidden = true;
+  calibrationFooterResult.hidden = true;
+  calibrationRun.hidden = false;
+
+  const calibrationClock = new AudioClock(clock.audioContext);
+  await calibrationClock.start();
+  if (token !== calibrationRunToken) return;
+
+  const visualResult = await runCalibrationStage(token, calibrationClock, "visual");
+  if (token !== calibrationRunToken || visualResult === null) return;
+  const suggestedInputOffsetMs = suggestInputOffsetMs(visualResult);
+
+  const audioResult = await runCalibrationStage(token, calibrationClock, "audio");
+  if (token !== calibrationRunToken || audioResult === null) return;
+  const suggestedAudioOffsetMs = suggestAudioOffsetMs(audioResult, suggestedInputOffsetMs);
+
+  calibrationSuggestedInputOffsetMs = suggestedInputOffsetMs;
+  calibrationSuggestedAudioOffsetMs = suggestedAudioOffsetMs;
+  showCalibrationResult(visualResult, audioResult, suggestedInputOffsetMs, suggestedAudioOffsetMs);
+}
+
+function showCalibrationResult(
+  visualResult: CalibrationTestResult,
+  audioResult: CalibrationTestResult,
+  suggestedInputOffsetMsValue: number,
+  suggestedAudioOffsetMsValue: number,
+): void {
+  calibrationRun.hidden = true;
+  calibrationResult.hidden = false;
+  calibrationFooterResult.hidden = false;
+
+  const currentInput = Number(optionInputOffsetInput.value) || 0;
+  const currentAudio = Number(optionAudioOffsetInput.value) || 0;
+  calibrationResultInput.textContent = `현재 ${currentInput}ms → 제안 ${suggestedInputOffsetMsValue}ms`;
+  calibrationResultAudio.textContent = `현재 ${currentAudio}ms → 제안 ${suggestedAudioOffsetMsValue}ms`;
+
+  const insufficient = visualResult.insufficientSamples || audioResult.insufficientSamples;
+  calibrationResultWarning.hidden = !insufficient;
+  if (insufficient) {
+    calibrationResultWarning.textContent = `표본이 부족합니다(시각 ${visualResult.matchedCount}/${visualResult.totalBeats}, 오디오 ${audioResult.matchedCount}/${audioResult.totalBeats}). 다시 시도해 주세요.`;
+  }
+  calibrationApplyBtn.disabled = insufficient;
+}
+
+function resetCalibrationOverlay(): void {
+  calibrationRunToken++; // 진행 중이던 카운트다운/측정 루프를 다음 체크포인트에서 무효화
+  calibrationIntro.hidden = false;
+  calibrationRun.hidden = true;
+  calibrationResult.hidden = true;
+  calibrationFooterResult.hidden = true;
+  calibrationApplyBtn.disabled = false;
+  calibrationSuggestedInputOffsetMs = null;
+  calibrationSuggestedAudioOffsetMs = null;
+}
+
+function closeCalibrationOverlay(): void {
+  calibrationRunToken++;
+  calibrationOverlay.hidden = true;
+}
+
+calibrationOpenBtn.addEventListener("click", () => {
+  resetCalibrationOverlay();
+  calibrationOverlay.hidden = false;
+});
+
+calibrationStartBtn.addEventListener("click", () => {
+  void runCalibration();
+});
+
+calibrationRetryBtn.addEventListener("click", () => {
+  resetCalibrationOverlay();
+  void runCalibration();
+});
+
+calibrationCloseBtn.addEventListener("click", closeCalibrationOverlay);
+calibrationOverlay.addEventListener("click", (event) => {
+  if (event.target === calibrationOverlay) closeCalibrationOverlay();
+});
+
+calibrationApplyBtn.addEventListener("click", () => {
+  if (calibrationSuggestedInputOffsetMs === null || calibrationSuggestedAudioOffsetMs === null) return;
+  optionInputOffsetInput.value = String(calibrationSuggestedInputOffsetMs);
+  optionAudioOffsetInput.value = String(calibrationSuggestedAudioOffsetMs);
+  closeCalibrationOverlay();
+});
+
 // GAS는 서바이벌형(HARD/CHALLENGE)에서만 의미가 있다. NORMAL을 고르면 숨긴다.
 function updateGasRowVisibility(): void {
   const gaugeType = optionGaugeTypeSelect.value as GaugeType;
@@ -1434,9 +1727,11 @@ optionsOverlay.addEventListener("click", (event) => {
 
 // 선곡 화면에서 스페이스바를 누르면 옵션이 뜨고, 다시 누르면 닫힌다(SPEC.md 6절).
 // 키 재배정 대기 중(스페이스바로 FX를 새로 배정하려는 경우 등)에는 옵션 토글로 새지 않게 막는다.
+// 오프셋 자동 보정 진행 중에도 스페이스는 캘리브레이션 입력 캡처용이라 여기서 가로채면 안 된다.
 window.addEventListener("keydown", (event) => {
   if (screen !== "songSelect") return;
   if (awaitingRebindSlot !== null) return;
+  if (!calibrationOverlay.hidden) return;
   if (event.key !== " ") return;
   event.preventDefault();
   if (optionsOverlay.hidden) openOptionsOverlay();

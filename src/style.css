@@ -214,6 +214,106 @@ h1 {
   gap: 14px;
 }
 
+.calibration-panel {
+  width: min(360px, 90vw);
+  gap: 14px;
+}
+
+.calibration-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.calibration-intro[hidden] {
+  display: none;
+}
+
+.calibration-intro p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #8b93a7;
+  text-align: center;
+}
+
+.calibration-intro button {
+  margin-top: 10px;
+  padding: 10px 24px;
+  border: 1px solid #7dd3fc;
+  border-radius: 6px;
+  background: #7dd3fc22;
+  color: #7dd3fc;
+  font-family: "Consolas", monospace;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.calibration-run {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.calibration-run[hidden] {
+  display: none;
+}
+
+.calibration-stage-label {
+  font-size: 0.85rem;
+  color: #8b93a7;
+  letter-spacing: 0.05em;
+}
+
+#calibration-canvas {
+  display: block;
+}
+
+.calibration-countdown {
+  min-height: 1.6rem;
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: #fac775;
+  font-family: "Consolas", monospace;
+}
+
+.calibration-result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.calibration-result[hidden] {
+  display: none;
+}
+
+.calibration-result .option-row span {
+  font-family: "Consolas", monospace;
+  font-size: 0.85rem;
+  color: #e8eaf0;
+}
+
+.calibration-result-warning {
+  padding: 8px 10px;
+  border: 1px solid #fa5252;
+  border-radius: 6px;
+  background: #fa525220;
+  color: #ff8787;
+  font-size: 0.8rem;
+}
+
+.calibration-result-warning[hidden] {
+  display: none;
+}
+
+#calibration-footer-result[hidden] {
+  display: none;
+}
+
 /* 가운데에 노트(1/2/3 + FX) 블록을 두고, 스크래치 업/다운은 세로로 붙는 기둥 하나로
    그 옆에 붙인다 — 스크래치 사이드 체크박스에 따라 row-reverse로 좌우를 바꿔서,
    실제 게임 화면에서 스크래치가 있는 쪽과 일치시킨다. */
