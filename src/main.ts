@@ -1345,6 +1345,10 @@ const CALIBRATION_BEAT_FLASH_WINDOW_MS = 60;
 type CalibrationStage = "visual" | "audio";
 
 let calibrationRunToken = 0; // 재시도/취소 시 진행 중이던 비동기 루프를 무효화하는 토큰
+// 오디오 테스트에서 예약해둔(미래 재생 예정 포함) 노드들. AudioScheduledSourceNode.start()로
+// 예약한 소리는 JS 루프를 취소해도 스스로 멈추지 않으므로, 팝업을 닫거나 다시 시도할 때
+// 여기 담긴 노드를 전부 stop()해서 꺼야 한다.
+let calibrationActiveAudioNodes: AudioScheduledSourceNode[] = [];
 let calibrationSuggestedInputOffsetMs: number | null = null;
 let calibrationSuggestedAudioOffsetMs: number | null = null;
 
@@ -1359,21 +1363,38 @@ function calibrationCtxTimeForGameMs(clockRef: AudioClock, gameTimeMs: number): 
   return startedAtCtxTime + gameTimeMs / 1000;
 }
 
-function scheduleCalibrationKick(ctx: AudioContext, atCtxTime: number): void {
+// 저음 사인파 몸통만으로는 노트북/폰 내장 스피커에서 저음역이 거의 재생되지 않아
+// "쿵" 소리가 아예 안 들리는 문제가 있었다(2026-08-13). 몸통 음높이를 올리고,
+// 소형 스피커에서도 확실히 지각되는 짧은 고음 클릭(어택)을 얹는다 — 실제 킥 드럼
+// 신스에서 흔히 쓰는 기법.
+function scheduleCalibrationKick(ctx: AudioContext, atCtxTime: number): AudioScheduledSourceNode[] {
   const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
+  const oscGain = ctx.createGain();
   osc.type = "sine";
-  osc.frequency.setValueAtTime(150, atCtxTime);
-  osc.frequency.exponentialRampToValueAtTime(50, atCtxTime + 0.12);
-  gain.gain.setValueAtTime(0.9, atCtxTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, atCtxTime + 0.15);
-  osc.connect(gain);
-  gain.connect(ctx.destination);
+  osc.frequency.setValueAtTime(220, atCtxTime);
+  osc.frequency.exponentialRampToValueAtTime(80, atCtxTime + 0.12);
+  oscGain.gain.setValueAtTime(1, atCtxTime);
+  oscGain.gain.exponentialRampToValueAtTime(0.001, atCtxTime + 0.18);
+  osc.connect(oscGain);
+  oscGain.connect(ctx.destination);
   osc.start(atCtxTime);
-  osc.stop(atCtxTime + 0.16);
+  osc.stop(atCtxTime + 0.2);
+
+  const click = ctx.createOscillator();
+  const clickGain = ctx.createGain();
+  click.type = "square";
+  click.frequency.setValueAtTime(900, atCtxTime);
+  clickGain.gain.setValueAtTime(0.35, atCtxTime);
+  clickGain.gain.exponentialRampToValueAtTime(0.001, atCtxTime + 0.02);
+  click.connect(clickGain);
+  clickGain.connect(ctx.destination);
+  click.start(atCtxTime);
+  click.stop(atCtxTime + 0.03);
+
+  return [osc, click];
 }
 
-function scheduleCalibrationSnare(ctx: AudioContext, atCtxTime: number): void {
+function scheduleCalibrationSnare(ctx: AudioContext, atCtxTime: number): AudioScheduledSourceNode[] {
   const bufferSize = Math.floor(ctx.sampleRate * 0.12);
   const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
   const data = buffer.getChannelData(0);
@@ -1393,17 +1414,32 @@ function scheduleCalibrationSnare(ctx: AudioContext, atCtxTime: number): void {
   gain.connect(ctx.destination);
   noise.start(atCtxTime);
   noise.stop(atCtxTime + 0.13);
+  return [noise];
 }
 
 // 짝수 박(1,3번째...)은 쿵(킥), 홀수 박(2,4번째...)은 짝(스네어) — "쿵짝쿵짝" 패턴.
-// 동기화된 시각 신호는 의도적으로 넣지 않는다(오디오 지연만 순수하게 측정하기 위해).
+// 예약된 노드는 calibrationActiveAudioNodes에 담아둬서, 팝업을 도중에 닫아도
+// stopCalibrationAudio()로 아직 재생되지 않은/재생 중인 소리를 전부 멈출 수 있게 한다.
 function scheduleCalibrationDrumPattern(clockRef: AudioClock, beatScheduleMs: readonly number[]): void {
   const ctx = clockRef.audioContext;
   beatScheduleMs.forEach((beatMs, i) => {
     const atCtxTime = calibrationCtxTimeForGameMs(clockRef, beatMs);
-    if (i % 2 === 0) scheduleCalibrationKick(ctx, atCtxTime);
-    else scheduleCalibrationSnare(ctx, atCtxTime);
+    const nodes = i % 2 === 0 ? scheduleCalibrationKick(ctx, atCtxTime) : scheduleCalibrationSnare(ctx, atCtxTime);
+    calibrationActiveAudioNodes.push(...nodes);
   });
+}
+
+// 아직 재생되지 않았거나 재생 중인 예약된 노드를 전부 즉시 정지한다. 이미 끝난 노드에
+// stop()을 호출해도 안전하지만(No-op), 혹시 모를 예외까지 무시하도록 try/catch로 감싼다.
+function stopCalibrationAudio(): void {
+  for (const node of calibrationActiveAudioNodes) {
+    try {
+      node.stop();
+    } catch {
+      // 이미 정지된 노드 등 — 무시.
+    }
+  }
+  calibrationActiveAudioNodes = [];
 }
 
 async function runCalibrationCountdown(token: number): Promise<boolean> {
@@ -1464,7 +1500,7 @@ async function runCalibrationStage(
       const flash = isCalibrationBeatFlash(nowMs, nearestBeatMs(beatScheduleMs, nowMs), CALIBRATION_BEAT_FLASH_WINDOW_MS);
       drawCalibrationBeatIndicator(calibrationCtx, calibrationCanvas.width, progress, flash);
       // 총 몇 박인지/지금 몇 번째인지 알 수 있도록 카운트다운 자리에 진행 카운터를 이어서 표시한다.
-      const beatsReached = Math.min(beatScheduleMs.filter((b) => b <= nowMs).length + 1, beatScheduleMs.length);
+      const beatsReached = Math.min(beatScheduleMs.filter((b) => b <= nowMs).length, beatScheduleMs.length);
       calibrationCountdownEl.textContent = `${beatsReached} / ${beatScheduleMs.length}`;
       if (nowMs >= stageEndMs) {
         resolve();
@@ -1530,6 +1566,7 @@ function showCalibrationResult(
 
 function resetCalibrationOverlay(): void {
   calibrationRunToken++; // 진행 중이던 카운트다운/측정 루프를 다음 체크포인트에서 무효화
+  stopCalibrationAudio(); // 오디오 테스트 도중 "다시 시도"를 눌러도 예약된 소리가 계속 나지 않도록
   calibrationIntro.hidden = false;
   calibrationRun.hidden = true;
   calibrationResult.hidden = true;
@@ -1541,6 +1578,7 @@ function resetCalibrationOverlay(): void {
 
 function closeCalibrationOverlay(): void {
   calibrationRunToken++;
+  stopCalibrationAudio(); // 오디오 테스트 도중 팝업을 닫아도 예약된 소리가 계속 나지 않도록
   calibrationOverlay.hidden = true;
 }
 
