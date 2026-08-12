@@ -71,6 +71,14 @@ export const SCRATCH_LANE_TINT_OPACITY = 0.14;
 export const JUDGE_LINE_COLOR = "#D85A30";
 export const LANE_DIVIDER_COLOR = "rgba(255, 255, 255, 0.15)";
 
+// --- 마디선 ---
+// 채보에 beatsPerMeasure가 없을 때 쓰는 기본 박자(4/4의 분자). 추후 채보 에디터가
+// 채보별로 다른 값을 넣으면 그 값이 그대로 마디선 간격에 반영된다.
+export const DEFAULT_BEATS_PER_MEASURE = 4;
+// 노트에 묻히지 않으면서 배경보다는 뚜렷하도록, 레인 구분선보다 살짝 밝게.
+export const BAR_LINE_COLOR = "rgba(255, 255, 255, 0.32)";
+export const BAR_LINE_WIDTH = 2;
+
 // --- 노트 스킨 색상 (SPEC.md 6절) ---
 // 자유 색상 선택 대신 가독성 검증된 팔레트 5종 중에서 고른다.
 export interface NoteSkinPalette {

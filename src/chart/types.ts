@@ -26,5 +26,8 @@ export interface Chart {
   bpmChanges: BpmChange[]; // time 오름차순 정렬 보장 (parseChart가 정렬함)
   level: number;
   holdTickIntervalBeats?: number; // 선택. 채보 전체 홀드 틱 간격(비트) 기본값
+  // 선택. 한 마디에 들어가는 박(4분음표) 수 = 박자표의 분자. 생략 시 config.ts 기본값(4/4).
+  // 마디선 렌더링에 쓰이며, 추후 채보 에디터가 이 값을 바꾸면 그대로 반영된다.
+  beatsPerMeasure?: number;
   notes: ChartNote[]; // time 오름차순 정렬 보장 (parseChart가 정렬함)
 }

@@ -1,4 +1,6 @@
 import {
+  BAR_LINE_COLOR,
+  BAR_LINE_WIDTH,
   FX_OPACITY,
   JUDGE_LINE_COLOR,
   LANE_DIVIDER_COLOR,
@@ -20,7 +22,7 @@ export interface NoteColors {
   scratchColor: string;
 }
 
-// 렌더 순서(SPEC.md 3절): 레인 배경 → FX 노트 → 일반 노트 → 판정선 → 이펙트(추후).
+// 렌더 순서(SPEC.md 3절): 레인 배경 → 마디선 → FX 노트 → 일반 노트 → 판정선 → 이펙트.
 // 아래 draw 함수들은 이 순서로 호출되어야 FX 바가 일반 노트에 가려지지 않는다.
 
 export function drawLaneBackground(ctx: CanvasRenderingContext2D, layout: LaneLayout): void {
@@ -36,6 +38,27 @@ export function drawLaneBackground(ctx: CanvasRenderingContext2D, layout: LaneLa
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, layout.canvasHeight);
+    ctx.stroke();
+  }
+}
+
+// 마디선은 노트와 동일한 noteY 변환을 쓰므로 노트와 완전히 같은 속도로 함께 스크롤된다.
+// 노트에 가려지도록 레인 배경 직후(FX 노트 이전)에 그린다.
+export function drawBarLines(
+  ctx: CanvasRenderingContext2D,
+  layout: LaneLayout,
+  barLineTimesMs: readonly number[],
+  currentTimeMs: number,
+  greenNumberMs: number,
+): void {
+  ctx.strokeStyle = BAR_LINE_COLOR;
+  ctx.lineWidth = BAR_LINE_WIDTH;
+  for (const timeMs of barLineTimesMs) {
+    const y = noteY(timeMs, currentTimeMs, greenNumberMs, layout.judgeLineY);
+    if (y < 0 || y > layout.canvasHeight) continue;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(layout.canvasWidth, y);
     ctx.stroke();
   }
 }

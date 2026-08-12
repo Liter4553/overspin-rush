@@ -63,6 +63,12 @@ export function parseChart(data: unknown): Chart {
   if (raw.holdTickIntervalBeats !== undefined && typeof raw.holdTickIntervalBeats !== "number") {
     throw new Error("holdTickIntervalBeats는 숫자여야 합니다.");
   }
+  if (raw.beatsPerMeasure !== undefined) {
+    if (typeof raw.beatsPerMeasure !== "number") throw new Error("beatsPerMeasure는 숫자여야 합니다.");
+    if (!Number.isInteger(raw.beatsPerMeasure) || raw.beatsPerMeasure < 1) {
+      throw new Error("beatsPerMeasure는 1 이상의 정수여야 합니다.");
+    }
+  }
 
   const bpmChanges = raw.bpmChanges
     .map(parseBpmChange)
@@ -83,6 +89,7 @@ export function parseChart(data: unknown): Chart {
     bpmChanges,
     level: raw.level,
     holdTickIntervalBeats: raw.holdTickIntervalBeats as number | undefined,
+    beatsPerMeasure: raw.beatsPerMeasure as number | undefined,
     notes,
   };
 }

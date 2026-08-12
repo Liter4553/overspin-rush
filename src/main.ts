@@ -4,7 +4,8 @@ import { currentBpm } from "./core/scroll";
 import { parseChart } from "./chart/parseChart";
 import { dummyChartRaw } from "./chart/dummyChart";
 import { computeLaneLayout } from "./render/canvas";
-import { drawFxNotes, drawJudgeLine, drawLaneBackground, drawNotes, type NoteColors } from "./render/noteRenderer";
+import { drawBarLines, drawFxNotes, drawJudgeLine, drawLaneBackground, drawNotes, type NoteColors } from "./render/noteRenderer";
+import { generateBarLineTimesMs } from "./core/barLines";
 import { addJudgmentTick, drawJudgmentBar, type JudgmentTick, type TickSource } from "./render/judgmentBar";
 import { drawComboDisplay, drawJudgmentText, type LatestJudgment } from "./render/judgmentText";
 import { addHitEffect, createHitEffect, drawHitEffects, pruneExpiredHitEffects, type HitEffect } from "./render/hitEffect";
@@ -536,6 +537,9 @@ function allSongs(): SongEntry[] {
 // 실제 플레이에 쓰이는 채보. 원본 chart는 절대 변형하지 않고, 배치 옵션을 적용한
 // 새 노트 배열로 매 플레이 시작 시 다시 만든다(SPEC.md 6절).
 let activeChart: Chart = chart;
+// 마디선 시각. 채보/BPM이 바뀌지 않는 한 고정이라 매 프레임 다시 계산하지 않고
+// 곡 시작 시 한 번만 만들어 둔다.
+let barLineTimesMs: number[] = [];
 
 function buildPlayChart(baseChart: Chart, arrangement: Arrangement): Chart {
   return { ...baseChart, notes: applyArrangement(baseChart.notes, arrangement) };
@@ -1115,6 +1119,7 @@ function renderLoop(): void {
 
   ctx.clearRect(0, 0, canvasWidth, CANVAS_HEIGHT);
   drawLaneBackground(ctx, layout);
+  drawBarLines(ctx, layout, barLineTimesMs, currentTimeMs, fallTimeMs);
   drawFxNotes(ctx, layout, pendingNotes, currentTimeMs, fallTimeMs, activeNoteColors);
   drawNotes(ctx, layout, pendingNotes, currentTimeMs, fallTimeMs, activeNoteColors);
   drawJudgeLine(ctx, layout);
@@ -1187,6 +1192,7 @@ async function startPlay(): Promise<void> {
   activeChart = buildPlayChart(chart, selectedArrangement);
   recalibrateNoteSpeed(currentBpm(activeChart.bpmChanges, 0)); // 곡 시작 BPM 기준으로 배속을 한 번 고정
   songDurationMs = chartDurationMs(activeChart, AUTO_MISS_WINDOW_MS);
+  barLineTimesMs = generateBarLineTimesMs(activeChart.bpmChanges, songDurationMs, activeChart.beatsPerMeasure);
   noteTracker = createNoteTracker(activeChart);
   gameState = createGameState();
   gaugeCoefficientA = computeGaugeCoefficient(countJudgeableNotes(activeChart));
