@@ -1,6 +1,6 @@
-// 임포트한 채보(음원/자켓 blob 포함)를 IndexedDB에 저장·조회한다.
+// 임포트한 채보(음원/자켓 blob 포함)를 IndexedDB에 저장·조회·삭제한다.
 // 스탠드얼론 포팅 후에도 그대로 쓸 수 있도록 저장 형식은 원본 .pattern 텍스트를 그대로 보관하고,
-// 파싱은 읽는 쪽(선곡 화면)에서 그때그때 수행한다. 삭제 기능은 이번 범위 밖.
+// 파싱은 읽는 쪽(선곡 화면)에서 그때그때 수행한다.
 import type { Difficulty } from "../chart/songList";
 
 const DB_NAME = "overspin-rush";
@@ -74,6 +74,17 @@ export async function getImportedSong(id: string): Promise<ImportedSong | undefi
     const tx = db.transaction(STORE_NAME, "readonly");
     const result = await promisifyRequest(tx.objectStore(STORE_NAME).get(id));
     return result as ImportedSong | undefined;
+  } finally {
+    db.close();
+  }
+}
+
+export async function deleteImportedSong(id: string): Promise<void> {
+  const db = await openDb();
+  try {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).delete(id);
+    await promisifyTransaction(tx);
   } finally {
     db.close();
   }

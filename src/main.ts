@@ -72,6 +72,7 @@ import { computeResults, countJudgeableNotes, type GradeTimingBreakdown } from "
 import { computeFitScale } from "./render/viewportScale";
 import { DIFFICULTIES, DIFFICULTY_LABEL, SONG_LIST, type Difficulty, type SongEntry } from "./chart/songList";
 import { loadImportedSongEntries } from "./import/importedSongEntries";
+import { deleteImportedSong } from "./import/songStorage";
 import { importSongFromZip } from "./import/importSong";
 import type { Chart, NoteLane } from "./chart/types";
 import {
@@ -440,6 +441,36 @@ let currentSongAudioBlob: Blob | undefined;
 let currentAudioSource: AudioBufferSourceNode | null = null;
 // IndexedDB에서 불러온 임포트 곡 목록. 더미 3곡(SONG_LIST)은 항상 고정, 이 목록은 새로고침/임포트 시 갱신된다.
 let importedSongEntries: SongEntry[] = [];
+function isImportedSong(id: string): boolean {
+  return importedSongEntries.some((s) => s.id === id);
+}
+
+// 곡을 길게 누르면(임포트한 곡만) 난이도 블록이 왼쪽으로 밀리며 삭제 버튼이 드러난다.
+// 더미 3곡은 삭제 대상이 아니므로 롱프레스 UI 자체가 뜨지 않는다.
+const SONG_DELETE_LONG_PRESS_MS = 500;
+let armedDeleteSongId: string | null = null;
+let longPressTimerId: number | null = null;
+let longPressJustArmed = false; // 롱프레스로 삭제 버튼을 연 그 릴리즈의 click 이벤트를 무시하기 위한 플래그
+
+function clearLongPressTimer(): void {
+  if (longPressTimerId !== null) {
+    window.clearTimeout(longPressTimerId);
+    longPressTimerId = null;
+  }
+}
+
+function disarmDeleteSong(): void {
+  if (armedDeleteSongId === null) return;
+  armedDeleteSongId = null;
+  renderSongList();
+}
+
+async function handleDeleteImportedSong(songId: string): Promise<void> {
+  armedDeleteSongId = null;
+  if (selectedSongId === songId) closeSongPopup();
+  await deleteImportedSong(songId);
+  await refreshSongList();
+}
 function allSongs(): SongEntry[] {
   return [...SONG_LIST, ...importedSongEntries];
 }
@@ -1453,21 +1484,24 @@ function renderSongList(): void {
   const songsHtml = allSongs()
     .map(
       (song) => `
-      <button type="button" class="song-item" data-song-id="${song.id}">
+      <button type="button" class="song-item${armedDeleteSongId === song.id ? " delete-armed" : ""}" data-song-id="${song.id}">
         <div class="song-item-jacket" style="background:${jacketBackgroundCss(song)}"></div>
         <div class="song-item-meta">
           <div class="song-item-title">${song.title}</div>
           <div class="song-item-artist">${song.artist}</div>
         </div>
-        <div class="song-item-levels">
-          ${clearMarkHtml(song.id)}
-          ${DIFFICULTIES.map((d) => {
-            const level = song.levels[d];
-            if (level === undefined) {
-              return `<div class="level-block level-${d} level-block-missing"><span class="level-block-label">${DIFFICULTY_LABEL[d]}</span><span class="level-block-value">-</span></div>`;
-            }
-            return `<div class="level-block level-${d}${isActiveLevelBlock(song.id, d) ? " active" : ""}" data-difficulty="${d}"><span class="level-block-label">${DIFFICULTY_LABEL[d]}</span><span class="level-block-value">${level}</span></div>`;
-          }).join("")}
+        <div class="song-item-levels-slot">
+          <div class="song-item-levels">
+            ${clearMarkHtml(song.id)}
+            ${DIFFICULTIES.map((d) => {
+              const level = song.levels[d];
+              if (level === undefined) {
+                return `<div class="level-block level-${d} level-block-missing"><span class="level-block-label">${DIFFICULTY_LABEL[d]}</span><span class="level-block-value">-</span></div>`;
+              }
+              return `<div class="level-block level-${d}${isActiveLevelBlock(song.id, d) ? " active" : ""}" data-difficulty="${d}"><span class="level-block-label">${DIFFICULTY_LABEL[d]}</span><span class="level-block-value">${level}</span></div>`;
+            }).join("")}
+          </div>
+          ${isImportedSong(song.id) ? `<div class="song-item-delete-btn" data-song-id="${song.id}">삭제</div>` : ""}
         </div>
       </button>`,
     )
@@ -1565,11 +1599,51 @@ importZipInput.addEventListener("change", async () => {
   }
 });
 
+// 곡 카드를 길게 누르면(임포트한 곡만) 삭제 버튼이 드러난다. 실제 클릭 판정 대상은
+// .song-item 전체이므로, 삭제 버튼이 없는 더미 곡을 눌러도 타이머는 돌지만 아무 UI도 뜨지 않는다.
+songListEl.addEventListener("pointerdown", (event) => {
+  const itemEl = (event.target as HTMLElement).closest<HTMLElement>(".song-item");
+  if (itemEl === null) return;
+  const songId = itemEl.dataset.songId!;
+  if (!isImportedSong(songId)) return;
+
+  clearLongPressTimer();
+  longPressTimerId = window.setTimeout(() => {
+    longPressTimerId = null;
+    longPressJustArmed = true;
+    armedDeleteSongId = songId;
+    renderSongList();
+  }, SONG_DELETE_LONG_PRESS_MS);
+});
+
+songListEl.addEventListener("pointerup", clearLongPressTimer);
+songListEl.addEventListener("pointerleave", clearLongPressTimer);
+songListEl.addEventListener("pointercancel", clearLongPressTimer);
+
 // 리스트에서 특정 난이도 블록을 직접 클릭하면 그 난이도가 선택된 채로 팝업이 뜬다.
 // "+ 채보 추가"/새로고침 버튼도 이 리스트 안에서 매 renderSongList마다 다시 그려지므로
 // (개별 리스너 대신) 여기서 위임 처리한다.
 songListEl.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
+
+  // 롱프레스로 막 삭제 버튼을 연 그 릴리즈 자체가 만든 click은 곡 선택으로 이어지면 안 된다.
+  if (longPressJustArmed) {
+    longPressJustArmed = false;
+    return;
+  }
+
+  const deleteBtn = target.closest<HTMLElement>(".song-item-delete-btn");
+  if (deleteBtn !== null) {
+    void handleDeleteImportedSong(deleteBtn.dataset.songId!);
+    return;
+  }
+
+  // 삭제 버튼이 열려 있는 상태에서 그 버튼이 아닌 다른 곳을 클릭하면, 이번 클릭은
+  // "닫기"로만 소비하고 원래 클릭의 동작(곡 선택 등)은 실행하지 않는다.
+  if (armedDeleteSongId !== null) {
+    disarmDeleteSong();
+    return;
+  }
 
   if (target.closest("#song-import-btn")) {
     songImportError.hidden = true;
@@ -1601,22 +1675,26 @@ songPopupDifficultyEl.addEventListener("click", (event) => {
 });
 
 // Esc를 누르거나 팝업/곡 목록 바깥을 클릭하면 팝업이 닫힌다. 곡 목록 클릭은
-// 다른 곡을 고르는 정상 동작이라 닫힘 대상에서 제외한다.
+// 다른 곡을 고르는 정상 동작이라 닫힘 대상에서 제외한다. 열려 있는 삭제 버튼도 같이 닫는다.
 window.addEventListener("keydown", (event) => {
   if (screen !== "songSelect") return;
   if (event.key !== "Escape") return;
+  disarmDeleteSong();
   if (!songPopup.classList.contains("open")) return;
   closeSongPopup();
 });
 
 document.addEventListener("click", (event) => {
   if (screen !== "songSelect") return;
-  if (!songPopup.classList.contains("open")) return;
   // event.target으로 contains()를 검사하면 안 된다 — 난이도 버튼처럼 클릭 시
   // innerHTML을 다시 그리는 요소는 클릭 처리 도중 target이 DOM에서 떨어져나가
   // songPopup.contains(target)가 false로 오판되는 버그가 있었다.
   // composedPath()는 버블링 시작 시점의 경로를 그대로 담고 있어 안전하다.
   const path = event.composedPath();
+  // 곡 목록 밖(옵션 버튼 등)을 클릭하면 열려 있는 삭제 버튼을 닫는다. 목록 안쪽 클릭은
+  // songListEl의 click 리스너가 이미 열림/닫힘을 자체 처리하므로 여기서는 건드리지 않는다.
+  if (!path.includes(songListEl)) disarmDeleteSong();
+  if (!songPopup.classList.contains("open")) return;
   if (path.includes(songPopup) || path.includes(songListEl)) return;
   closeSongPopup();
 });

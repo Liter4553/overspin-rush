@@ -419,6 +419,15 @@ h1 {
   color: #8b93a7;
 }
 
+/* 곡을 길게 누르면(임포트한 곡만) 이 슬롯 안에서 .song-item-levels가 왼쪽으로 밀리고
+   그 뒤에 숨어 있던 .song-item-delete-btn이 오른쪽에서 드러난다. .song-item에 이미
+   overflow: hidden이 걸려 있어 밀려나가는 부분은 자연히 잘린다. */
+.song-item-levels-slot {
+  position: relative;
+  flex: none;
+  display: flex;
+}
+
 /* 난이도를 세로로 쌓는 대신 가로로 나열된 블록 3개로 표시 (오른쪽 끝에 꽉 차게).
    align-items를 center로 두면 level-block이 기본 stretch를 잃고 내용물 높이로
    줄어드는 버그가 있었다 — stretch(기본값)를 유지하고 마크만 따로 세로 중앙 정렬한다. */
@@ -426,6 +435,38 @@ h1 {
   flex: none;
   display: flex;
   flex-direction: row;
+  transition: transform 0.18s ease;
+}
+
+.song-item.delete-armed .song-item-levels {
+  transform: translateX(-64px);
+}
+
+.song-item-delete-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fa5252;
+  color: #fff;
+  font-family: "Consolas", monospace;
+  font-weight: bold;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transform: translateX(100%);
+  transition: transform 0.18s ease, background 0.15s ease;
+}
+
+.song-item-delete-btn:hover {
+  background: #e03131;
+}
+
+.song-item.delete-armed .song-item-delete-btn {
+  transform: translateX(0);
 }
 
 /* EASY 블록 왼쪽 여백에 놓는 클리어 마크 하나(선택된 난이도의 최고 기록 대표 표시).

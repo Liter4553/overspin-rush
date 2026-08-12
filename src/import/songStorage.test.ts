@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { getAllImportedSongs, getImportedSong, saveImportedSong, type ImportedSong } from "./songStorage";
+import { deleteImportedSong, getAllImportedSongs, getImportedSong, saveImportedSong, type ImportedSong } from "./songStorage";
 
 function fakeSong(id: string): ImportedSong {
   return {
@@ -51,5 +51,20 @@ describe("songStorage", () => {
     const all = await getAllImportedSongs();
     expect(all).toHaveLength(1);
     expect(all[0].title).toBe("새 제목");
+  });
+
+  it("삭제한 곡은 목록과 조회에서 사라진다", async () => {
+    await saveImportedSong(fakeSong("song-1"));
+    await saveImportedSong(fakeSong("song-2"));
+
+    await deleteImportedSong("song-1");
+
+    expect(await getImportedSong("song-1")).toBeUndefined();
+    const all = await getAllImportedSongs();
+    expect(all.map((s) => s.id)).toEqual(["song-2"]);
+  });
+
+  it("존재하지 않는 id를 삭제해도 에러가 나지 않는다", async () => {
+    await expect(deleteImportedSong("no-such-id")).resolves.toBeUndefined();
   });
 });
