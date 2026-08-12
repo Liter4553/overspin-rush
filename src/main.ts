@@ -1457,12 +1457,15 @@ async function runCalibrationStage(
         return;
       }
       const nowMs = clockRef.currentTime * 1000;
-      if (stage === "visual") {
-        const nextBeat = beatScheduleMs.find((b) => b >= nowMs) ?? beatScheduleMs[beatScheduleMs.length - 1];
-        const progress = calibrationIndicatorProgress(nowMs, nextBeat, CALIBRATION_BEAT_INTERVAL_MS);
-        const flash = isCalibrationBeatFlash(nowMs, nearestBeatMs(beatScheduleMs, nowMs), CALIBRATION_BEAT_FLASH_WINDOW_MS);
-        drawCalibrationBeatIndicator(calibrationCtx, calibrationCanvas.width, progress, flash);
-      }
+      // 오디오 테스트에도 동일한 인디케이터를 보여준다(2026-08-13 결정) — "언제 시작하고 몇 번
+      // 눌러야 하는지 알 수 없다"는 사용성 문제가 측정 순도보다 우선한다고 판단.
+      const nextBeat = beatScheduleMs.find((b) => b >= nowMs) ?? beatScheduleMs[beatScheduleMs.length - 1];
+      const progress = calibrationIndicatorProgress(nowMs, nextBeat, CALIBRATION_BEAT_INTERVAL_MS);
+      const flash = isCalibrationBeatFlash(nowMs, nearestBeatMs(beatScheduleMs, nowMs), CALIBRATION_BEAT_FLASH_WINDOW_MS);
+      drawCalibrationBeatIndicator(calibrationCtx, calibrationCanvas.width, progress, flash);
+      // 총 몇 박인지/지금 몇 번째인지 알 수 있도록 카운트다운 자리에 진행 카운터를 이어서 표시한다.
+      const beatsReached = Math.min(beatScheduleMs.filter((b) => b <= nowMs).length + 1, beatScheduleMs.length);
+      calibrationCountdownEl.textContent = `${beatsReached} / ${beatScheduleMs.length}`;
       if (nowMs >= stageEndMs) {
         resolve();
         return;
