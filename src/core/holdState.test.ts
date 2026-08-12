@@ -5,8 +5,8 @@ import type { ChartNote } from "../chart/types";
 describe("computeTickIntervalMs", () => {
   const bpmChanges = [{ time: 0, bpm: 150 }];
 
-  it("오버라이드가 없으면 기본값(1비트)으로 BPM에 연동한다 (150bpm -> 400ms)", () => {
-    expect(computeTickIntervalMs(bpmChanges, 1000, undefined, undefined)).toBe(400);
+  it("오버라이드가 없으면 기본값(0.25비트=16분음표)으로 BPM에 연동한다 (150bpm -> 100ms)", () => {
+    expect(computeTickIntervalMs(bpmChanges, 1000, undefined, undefined)).toBe(100);
   });
 
   it("채보 전체 기본값이 있으면 그것을 쓴다", () => {
@@ -22,7 +22,7 @@ describe("computeTickIntervalMs", () => {
       { time: 0, bpm: 150 },
       { time: 1000, bpm: 300 },
     ];
-    expect(computeTickIntervalMs(changes, 1500, undefined, undefined)).toBe(200);
+    expect(computeTickIntervalMs(changes, 1500, undefined, undefined)).toBe(50);
   });
 });
 

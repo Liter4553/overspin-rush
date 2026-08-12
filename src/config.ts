@@ -140,7 +140,8 @@ export const JUDGE_GRADE_COLORS: Readonly<Record<string, string>> = {
 };
 
 // --- 홀드 틱 (마일스톤 6에서 사용) ---
-export const DEFAULT_HOLD_TICK_INTERVAL_BEATS = 1;
+// 4분음표를 1비트로 볼 때, 16분음표는 0.25비트다(2026-08-13 변경: 1비트 -> 16분음표).
+export const DEFAULT_HOLD_TICK_INTERVAL_BEATS = 0.25;
 
 // 판정 텍스트가 화면에 머무는 시간(ms).
 export const JUDGE_TEXT_DISPLAY_MS = 500;
