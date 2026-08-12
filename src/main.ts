@@ -166,7 +166,7 @@ app.innerHTML = `
   <h1>Overspin RUSH</h1>
 
   <div id="song-select-view">
-    <h2>SELECT</h2>
+    <h2>선곡</h2>
     <div class="song-list" id="song-list"></div>
     <div class="song-import-error" id="song-import-error" hidden></div>
     <input type="file" id="import-zip-input" accept=".zip,application/zip" hidden />
@@ -188,7 +188,7 @@ app.innerHTML = `
             </div>
           </div>
         </div>
-        <button id="song-popup-start-btn">START</button>
+        <button id="song-popup-start-btn">시작</button>
       </div>
     </div>
   </div>
@@ -355,7 +355,7 @@ app.innerHTML = `
       <canvas id="game-canvas"></canvas>
       <div class="pause-panel" id="pause-panel" hidden>
         <div class="pause-inner">
-          <h2>PAUSE</h2>
+          <h2>일시정지</h2>
           <div class="pause-countdown" id="pause-countdown" hidden></div>
           <button id="resume-btn">재개</button>
           <button id="pause-restart-btn">다시시작</button>
@@ -370,7 +370,7 @@ app.innerHTML = `
   </div>
 
   <div class="results-panel" id="results-panel" hidden>
-    <h2>RESULT</h2>
+    <h2>결과</h2>
     <div class="clear-grade-badge" id="clear-grade-badge"></div>
     <div class="gauge-bar-wrap" id="result-gauge-bar-wrap">
       <span class="gauge-bar-type" id="result-gauge-bar-type">NORMAL</span>
@@ -380,10 +380,10 @@ app.innerHTML = `
       <span class="gauge-bar-percent" id="result-gauge-bar-percent">0%</span>
     </div>
     <div class="results-summary">
-      <div class="summary-stat"><span class="summary-label">SCORE</span><span class="summary-value" id="result-score">0</span></div>
+      <div class="summary-stat"><span class="summary-label">점수</span><span class="summary-value" id="result-score">0</span></div>
       <div class="summary-stat"><span class="summary-label">이론치</span><span class="summary-value" id="result-theoretical">0</span></div>
       <div class="summary-stat"><span class="summary-label">정확도</span><span class="summary-value" id="result-accuracy">0%</span></div>
-      <div class="summary-stat"><span class="summary-label">MAX COMBO</span><span class="summary-value" id="result-maxcombo">0</span></div>
+      <div class="summary-stat"><span class="summary-label">최대 콤보</span><span class="summary-value" id="result-maxcombo">0</span></div>
     </div>
     <div class="grade-panel" id="result-grade-panel"></div>
     <div class="histogram-label">판정 오차 분포</div>
@@ -394,7 +394,7 @@ app.innerHTML = `
     </div>
     <div class="results-buttons">
       <button id="restart-btn">다시하기</button>
-      <button id="results-song-select-btn">SELECT</button>
+      <button id="results-song-select-btn">선곡</button>
     </div>
   </div>
 `;
@@ -1865,8 +1865,8 @@ function renderPopupDifficultyButtons(song: SongEntry): void {
     .join("");
 }
 
-// 미러 옵션 토글(팝업). "정배/미러"보다 포괄적으로 읽히도록 ON/OFF 표기로 통일.
-const MIRROR_LABEL: Readonly<Record<Arrangement, string>> = { normal: "MIRROR OFF", mirror: "MIRROR ON" };
+// 미러 옵션 토글(팝업). "정배/미러"보다 포괄적으로 읽히도록 켬/끔 표기로 통일.
+const MIRROR_LABEL: Readonly<Record<Arrangement, string>> = { normal: "미러 끔", mirror: "미러 켬" };
 
 function updateMirrorToggleLabel(): void {
   songPopupMirrorToggle.textContent = MIRROR_LABEL[selectedArrangement];
@@ -2103,7 +2103,7 @@ songPopupStartBtn.addEventListener("click", async () => {
   await startPlay();
 
   songPopupStartBtn.disabled = false;
-  songPopupStartBtn.textContent = "START";
+  songPopupStartBtn.textContent = "시작";
 });
 
 function goToSongSelect(): void {
