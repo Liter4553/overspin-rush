@@ -180,6 +180,18 @@ export const SCRATCH_THRESHOLD_MAX = 60;
 // 마지막 유효 스크래치로부터 이 시간(ms)이 지나면 방향 제한이 풀린다.
 export const SCRATCH_DIR_RESET_MS = 2000;
 
+// --- 오프셋 자동 보정 마법사 (SPEC.md 6절) ---
+// 시각 테스트(소리 없음)로 입력 오프셋을, 그 값을 기준으로 오디오 테스트(쿵짝 드럼)로
+// 오디오 오프셋을 역산한다. 두 테스트 모두 같은 박자 구성(BPM/마디)을 공유한다.
+export const CALIBRATION_BPM = 120;
+export const CALIBRATION_BEATS_PER_MEASURE = 4;
+export const CALIBRATION_MEASURES = 4; // 총 16박
+// 박자와 입력을 매칭할 때 허용하는 오차(ms). 실제 판정 윈도우(±80ms)보다 훨씬 넉넉하게
+// 잡아서, 보정 전 오프셋이 심하게 틀어져 있어도 매칭 자체는 되도록 한다.
+export const CALIBRATION_MATCH_TOLERANCE_MS = 200;
+// 총 16박 중 이 값 미만으로 매칭되면 표본 부족으로 판단하고 결과를 신뢰하지 않는다.
+export const CALIBRATION_MIN_MATCHED_BEATS = 8;
+
 // --- 옵션 프리셋 저장/복원 (SPEC.md 6절) ---
 // 자동 저장 하나가 아니라, 사용자가 원하는 슬롯에 명시적으로 저장/전환하는 프리셋 3개.
 export const PRESET_COUNT = 3;
