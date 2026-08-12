@@ -1583,19 +1583,59 @@ async function refreshSongList(): Promise<void> {
   renderSongList();
 }
 
+// 임포트 실패 배너는 5초간 보인 뒤 페이드아웃(0.4초)되며 자동으로 사라진다. 새 임포트
+// 시도나 배너를 직접 닫는 동작이 끼어들면 기존 타이머를 취소하고 즉시 초기 상태로 되돌린다.
+const SONG_IMPORT_ERROR_VISIBLE_MS = 5000;
+const SONG_IMPORT_ERROR_FADE_MS = 400; // style.css의 .song-import-error transition과 일치시킨다
+let songImportErrorFadeTimer: number | null = null;
+let songImportErrorHideTimer: number | null = null;
+
+function clearSongImportErrorTimers(): void {
+  if (songImportErrorFadeTimer !== null) {
+    window.clearTimeout(songImportErrorFadeTimer);
+    songImportErrorFadeTimer = null;
+  }
+  if (songImportErrorHideTimer !== null) {
+    window.clearTimeout(songImportErrorHideTimer);
+    songImportErrorHideTimer = null;
+  }
+}
+
+function hideSongImportError(): void {
+  clearSongImportErrorTimers();
+  songImportError.hidden = true;
+  songImportError.textContent = "";
+  songImportError.classList.remove("fade-out");
+}
+
+function showSongImportError(message: string): void {
+  clearSongImportErrorTimers();
+  songImportError.textContent = message;
+  songImportError.classList.remove("fade-out");
+  songImportError.hidden = false;
+  songImportErrorFadeTimer = window.setTimeout(() => {
+    songImportErrorFadeTimer = null;
+    songImportError.classList.add("fade-out");
+    songImportErrorHideTimer = window.setTimeout(() => {
+      songImportErrorHideTimer = null;
+      songImportError.hidden = true;
+      songImportError.textContent = "";
+      songImportError.classList.remove("fade-out");
+    }, SONG_IMPORT_ERROR_FADE_MS);
+  }, SONG_IMPORT_ERROR_VISIBLE_MS);
+}
+
 importZipInput.addEventListener("change", async () => {
   const file = importZipInput.files?.[0];
   importZipInput.value = ""; // 같은 파일을 다시 골라도 change가 또 발생하도록 비워둔다.
   if (!file) return;
-  songImportError.hidden = true;
-  songImportError.textContent = "";
+  hideSongImportError();
   try {
     await importSongFromZip(file);
     await refreshSongList();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    songImportError.textContent = `채보 임포트 실패: ${message}`;
-    songImportError.hidden = false;
+    showSongImportError(`채보 임포트 실패: ${message}`);
   }
 });
 
@@ -1646,7 +1686,7 @@ songListEl.addEventListener("click", (event) => {
   }
 
   if (target.closest("#song-import-btn")) {
-    songImportError.hidden = true;
+    hideSongImportError();
     importZipInput.click();
     return;
   }

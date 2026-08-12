@@ -599,10 +599,16 @@ h1 {
   background: #fa525220;
   color: #ff8787;
   font-size: 0.85rem;
+  opacity: 1;
+  transition: opacity 0.4s ease;
 }
 
 .song-import-error[hidden] {
   display: none;
+}
+
+.song-import-error.fade-out {
+  opacity: 0;
 }
 
 .song-popup {
