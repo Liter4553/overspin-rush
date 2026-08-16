@@ -81,20 +81,23 @@ export const BAR_LINE_WIDTH = 2;
 
 // --- 노트 스킨 색상 (SPEC.md 6절) ---
 // 자유 색상 선택 대신 가독성 검증된 팔레트 5종 중에서 고른다.
+// 표시 이름(기본/네온/...)은 번역 대상이라 여기 두지 않고 i18n 테이블(src/i18n/ko.ts의
+// noteSkin)이 id로 들고 있다. 여기는 id와 색상만 갖는다.
+export type NoteSkinId = "default" | "neon" | "sunset" | "forest" | "ice";
+
 export interface NoteSkinPalette {
-  id: string;
-  label: string;
+  id: NoteSkinId;
   noteColor: string;
   fxColor: string;
   scratchColor: string;
 }
 
 export const NOTE_SKIN_PALETTES: readonly NoteSkinPalette[] = [
-  { id: "default", label: "기본", noteColor: NOTE_COLOR, fxColor: FX_COLOR, scratchColor: SCRATCH_NOTE_COLOR },
-  { id: "neon", label: "네온", noteColor: "#6C5CE7", fxColor: "#FD79A8", scratchColor: "#00CEC9" },
-  { id: "sunset", label: "선셋", noteColor: "#FF6B6B", fxColor: "#FFA94D", scratchColor: "#4DABF7" },
-  { id: "forest", label: "포레스트", noteColor: "#63B85C", fxColor: "#E8B33D", scratchColor: "#22B8CF" },
-  { id: "ice", label: "아이스", noteColor: "#74B9FF", fxColor: "#A29BFE", scratchColor: "#81ECEC" },
+  { id: "default", noteColor: NOTE_COLOR, fxColor: FX_COLOR, scratchColor: SCRATCH_NOTE_COLOR },
+  { id: "neon", noteColor: "#6C5CE7", fxColor: "#FD79A8", scratchColor: "#00CEC9" },
+  { id: "sunset", noteColor: "#FF6B6B", fxColor: "#FFA94D", scratchColor: "#4DABF7" },
+  { id: "forest", noteColor: "#63B85C", fxColor: "#E8B33D", scratchColor: "#22B8CF" },
+  { id: "ice", noteColor: "#74B9FF", fxColor: "#A29BFE", scratchColor: "#81ECEC" },
 ];
 export const DEFAULT_NOTE_SKIN_ID = "default";
 

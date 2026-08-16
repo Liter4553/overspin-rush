@@ -75,6 +75,7 @@ import { DIFFICULTIES, DIFFICULTY_LABEL, SONG_LIST, type Difficulty, type SongEn
 import { loadImportedSongEntries } from "./import/importedSongEntries";
 import { deleteImportedSong } from "./import/songStorage";
 import { importSongFromZip } from "./import/importSong";
+import { t } from "./i18n";
 import {
   generateCalibrationBeatScheduleMs,
   suggestAudioOffsetMs,
@@ -166,7 +167,7 @@ app.innerHTML = `
   <h1>Overspin RUSH</h1>
 
   <div id="song-select-view">
-    <h2>곡 선택</h2>
+    <h2>${t.songSelect.title}</h2>
     <div class="song-list" id="song-list"></div>
     <div class="song-import-error" id="song-import-error" hidden></div>
     <input type="file" id="import-zip-input" accept=".zip,application/zip" hidden />
@@ -188,67 +189,67 @@ app.innerHTML = `
             </div>
           </div>
         </div>
-        <button id="song-popup-start-btn">시작</button>
+        <button id="song-popup-start-btn">${t.songSelect.start}</button>
       </div>
     </div>
   </div>
 
   <div class="modal-overlay" id="options-overlay" hidden>
   <div class="options-panel" id="options-view">
-    <h2>옵션</h2>
+    <h2>${t.options.title}</h2>
     <div class="option-row">
-      <label>프리셋</label>
+      <label>${t.options.preset}</label>
       <div class="preset-buttons" id="preset-buttons">
         ${Array.from({ length: PRESET_COUNT }, (_, i) => `<button type="button" class="preset-btn" data-preset-index="${i}">${i + 1}</button>`).join("")}
       </div>
     </div>
     <div class="option-row">
-      <label for="option-canvas-width">캔버스 폭</label>
+      <label for="option-canvas-width">${t.options.canvasWidth}</label>
       <select id="option-canvas-width">
-        <option value="narrow">좁게</option>
-        <option value="normal" selected>보통</option>
-        <option value="wide">넓게</option>
+        <option value="narrow">${t.options.canvasWidthNarrow}</option>
+        <option value="normal" selected>${t.options.canvasWidthNormal}</option>
+        <option value="wide">${t.options.canvasWidthWide}</option>
       </select>
     </div>
     <div class="option-row">
-      <label for="option-note-speed">노트 속도 <span class="info-icon" id="note-speed-info-icon">\u{1F6C8}</span></label>
+      <label for="option-note-speed">${t.options.noteSpeed} <span class="info-icon" id="note-speed-info-icon">\u{1F6C8}</span></label>
       <input type="number" id="option-note-speed" min="${NOTE_SPEED_MIN}" max="${NOTE_SPEED_MAX}" step="${NOTE_SPEED_STEP}" value="${DEFAULT_NOTE_SPEED}" />
     </div>
     <div class="option-row">
-      <label for="option-audio-offset">오디오 오프셋(ms)</label>
+      <label for="option-audio-offset">${t.options.audioOffset}</label>
       <input type="number" id="option-audio-offset" min="${OFFSET_MIN_MS}" max="${OFFSET_MAX_MS}" value="${AUDIO_OFFSET_MS}" />
     </div>
     <div class="option-row">
-      <label for="option-input-offset">입력 오프셋(ms)</label>
+      <label for="option-input-offset">${t.options.inputOffset}</label>
       <input type="number" id="option-input-offset" min="${OFFSET_MIN_MS}" max="${OFFSET_MAX_MS}" value="${INPUT_OFFSET_MS}" />
     </div>
     <div class="option-row">
-      <label>오프셋 자동 보정</label>
-      <button type="button" id="calibration-open-btn">자동 보정 열기</button>
+      <label>${t.options.calibration}</label>
+      <button type="button" id="calibration-open-btn">${t.options.openCalibration}</button>
     </div>
     <div class="option-row">
-      <label for="option-judge-line">판정선 위치(px)</label>
+      <label for="option-judge-line">${t.options.judgeLine}</label>
       <input type="number" id="option-judge-line" min="${JUDGE_LINE_MARGIN_MIN}" max="${JUDGE_LINE_MARGIN_MAX}" value="${JUDGE_LINE_MARGIN_BOTTOM}" />
     </div>
     <div class="option-row">
-      <label for="option-scratch-threshold">마우스 감도(스크래치 임계값 px)</label>
+      <label for="option-scratch-threshold">${t.options.mouseSensitivity}</label>
       <input type="number" id="option-scratch-threshold" min="${SCRATCH_THRESHOLD_MIN}" max="${SCRATCH_THRESHOLD_MAX}" value="${SCRATCH_THRESHOLD}" />
     </div>
     <div class="option-row">
-      <label>키 설정</label>
-      <button type="button" id="keybind-open-btn">키 설정 열기</button>
+      <label>${t.options.keybind}</label>
+      <button type="button" id="keybind-open-btn">${t.options.openKeybind}</button>
     </div>
     <div class="option-row">
-      <label for="option-note-skin">노트 스킨</label>
+      <label for="option-note-skin">${t.options.noteSkin}</label>
       <select id="option-note-skin">
         ${NOTE_SKIN_PALETTES.map(
           (palette) =>
-            `<option value="${palette.id}"${palette.id === DEFAULT_NOTE_SKIN_ID ? " selected" : ""}>${palette.label}</option>`,
+            `<option value="${palette.id}"${palette.id === DEFAULT_NOTE_SKIN_ID ? " selected" : ""}>${t.noteSkin[palette.id]}</option>`,
         ).join("")}
       </select>
     </div>
     <div class="option-row">
-      <label for="option-gauge-type">게이지</label>
+      <label for="option-gauge-type">${t.options.gauge}</label>
       <select id="option-gauge-type">
         ${(Object.keys(GAUGE_TYPE_CONFIG) as GaugeType[])
           .map(
@@ -263,15 +264,15 @@ app.innerHTML = `
       <input type="checkbox" id="option-gas-enabled" />
     </div>
     <div class="options-footer">
-      <button type="button" id="option-save-preset">이 프리셋에 저장</button>
-      <button type="button" id="options-close-btn">닫기</button>
+      <button type="button" id="option-save-preset">${t.options.savePreset}</button>
+      <button type="button" id="options-close-btn">${t.common.close}</button>
     </div>
   </div>
   </div>
 
   <div class="modal-overlay" id="keybind-overlay" hidden>
   <div class="options-panel keybind-panel">
-    <h2>키 설정</h2>
+    <h2>${t.keybind.title}</h2>
     <div class="keybind-layout" id="keybind-layout">
       <div class="keybind-notes-block">
         <div class="keybind-lanes" id="keybind-lanes"></div>
@@ -281,23 +282,23 @@ app.innerHTML = `
     </div>
     <div class="keybind-error" id="keybind-error" hidden></div>
     <div class="option-row">
-      <label for="option-scratch-side">스크래치를 왼쪽에</label>
+      <label for="option-scratch-side">${t.keybind.scratchOnLeft}</label>
       <input type="checkbox" id="option-scratch-side" />
     </div>
     <div class="options-footer">
-      <button type="button" id="keybind-close-btn">닫기</button>
+      <button type="button" id="keybind-close-btn">${t.common.close}</button>
     </div>
   </div>
   </div>
 
   <div class="modal-overlay" id="calibration-overlay" hidden>
   <div class="options-panel calibration-panel">
-    <h2>오프셋 자동 보정</h2>
+    <h2>${t.calibration.title}</h2>
     <div class="calibration-intro" id="calibration-intro">
-      <p>스페이스 키로 두 가지 짧은 테스트를 진행합니다.</p>
-      <p>1) 소리 없이 화면만 보고 정확한 타이밍에 입력</p>
-      <p>2) 쿵짝 드럼 소리를 들으며 박자에 맞춰 입력</p>
-      <button type="button" id="calibration-start-btn">시작</button>
+      <p>${t.calibration.introLine1}</p>
+      <p>${t.calibration.introLine2}</p>
+      <p>${t.calibration.introLine3}</p>
+      <button type="button" id="calibration-start-btn">${t.calibration.start}</button>
     </div>
     <div class="calibration-run" id="calibration-run" hidden>
       <div class="calibration-stage-label" id="calibration-stage-label"></div>
@@ -305,16 +306,16 @@ app.innerHTML = `
       <div class="calibration-countdown" id="calibration-countdown"></div>
     </div>
     <div class="calibration-result" id="calibration-result" hidden>
-      <div class="option-row"><label>입력 오프셋</label><span id="calibration-result-input"></span></div>
-      <div class="option-row"><label>오디오 오프셋</label><span id="calibration-result-audio"></span></div>
+      <div class="option-row"><label>${t.calibration.resultInputOffset}</label><span id="calibration-result-input"></span></div>
+      <div class="option-row"><label>${t.calibration.resultAudioOffset}</label><span id="calibration-result-audio"></span></div>
       <div class="calibration-result-warning" id="calibration-result-warning" hidden></div>
     </div>
     <div class="options-footer" id="calibration-footer-result" hidden>
-      <button type="button" id="calibration-retry-btn">다시 시도</button>
-      <button type="button" id="calibration-apply-btn">적용</button>
+      <button type="button" id="calibration-retry-btn">${t.calibration.retry}</button>
+      <button type="button" id="calibration-apply-btn">${t.calibration.apply}</button>
     </div>
     <div class="options-footer">
-      <button type="button" id="calibration-close-btn">취소</button>
+      <button type="button" id="calibration-close-btn">${t.calibration.cancel}</button>
     </div>
   </div>
   </div>
@@ -355,11 +356,11 @@ app.innerHTML = `
       <canvas id="game-canvas"></canvas>
       <div class="pause-panel" id="pause-panel" hidden>
         <div class="pause-inner">
-          <h2>일시정지</h2>
+          <h2>${t.pause.title}</h2>
           <div class="pause-countdown" id="pause-countdown" hidden></div>
-          <button id="resume-btn">재개</button>
-          <button id="pause-restart-btn">다시시작</button>
-          <button id="pause-exit-btn" class="pause-exit-btn">나가기</button>
+          <button id="resume-btn">${t.pause.resume}</button>
+          <button id="pause-restart-btn">${t.pause.restart}</button>
+          <button id="pause-exit-btn" class="pause-exit-btn">${t.pause.exit}</button>
         </div>
       </div>
       <div class="fail-shutter" id="fail-shutter" hidden>
@@ -380,21 +381,21 @@ app.innerHTML = `
       <span class="gauge-bar-percent" id="result-gauge-bar-percent">0%</span>
     </div>
     <div class="results-summary">
-      <div class="summary-stat"><span class="summary-label">점수</span><span class="summary-value" id="result-score">0</span></div>
-      <div class="summary-stat"><span class="summary-label">이론치</span><span class="summary-value" id="result-theoretical">0</span></div>
-      <div class="summary-stat"><span class="summary-label">정확도</span><span class="summary-value" id="result-accuracy">0%</span></div>
-      <div class="summary-stat"><span class="summary-label">최대 콤보</span><span class="summary-value" id="result-maxcombo">0</span></div>
+      <div class="summary-stat"><span class="summary-label">${t.results.score}</span><span class="summary-value" id="result-score">0</span></div>
+      <div class="summary-stat"><span class="summary-label">${t.results.theoreticalMax}</span><span class="summary-value" id="result-theoretical">0</span></div>
+      <div class="summary-stat"><span class="summary-label">${t.results.accuracy}</span><span class="summary-value" id="result-accuracy">0%</span></div>
+      <div class="summary-stat"><span class="summary-label">${t.results.maxCombo}</span><span class="summary-value" id="result-maxcombo">0</span></div>
     </div>
     <div class="grade-panel" id="result-grade-panel"></div>
-    <div class="histogram-label">판정 오차 분포</div>
+    <div class="histogram-label">${t.results.histogramLabel}</div>
     <div class="histogram-wrap">
       <span class="histogram-corner histogram-corner-fast">FAST <span id="result-grade-fast">0</span></span>
       <span class="histogram-corner histogram-corner-slow">SLOW <span id="result-grade-slow">0</span></span>
       <div class="timing-chart" id="result-timing-chart"></div>
     </div>
     <div class="results-buttons">
-      <button id="restart-btn">다시하기</button>
-      <button id="results-song-select-btn">곡 선택</button>
+      <button id="restart-btn">${t.results.restart}</button>
+      <button id="results-song-select-btn">${t.results.songSelect}</button>
     </div>
   </div>
 `;
@@ -749,7 +750,7 @@ function renderTimingChart(breakdown: GradeTimingBreakdown): void {
       return `
         <div class="timing-bar-col">
           <div class="timing-bar-track">
-            <div class="timing-bar" style="height:${heightPercent}%; background:${color}" title="${count}건"></div>
+            <div class="timing-bar" style="height:${heightPercent}%; background:${color}" title="${t.results.timingBarCount(count)}"></div>
           </div>
           <div class="timing-bar-label" style="color:${color}">${label}</div>
         </div>`;
@@ -1242,7 +1243,7 @@ const KEYBIND_LANE_LABEL: Readonly<Record<0 | 1 | 2, string>> = { 0: "1", 1: "2"
 const RESERVED_KEYS: readonly string[] = [PAUSE_TRIGGER_KEY, SPEED_DECREASE_KEY, SPEED_INCREASE_KEY];
 
 function displayKeyLabel(key: string): string {
-  if (key === MOUSE_BINDING) return "마우스";
+  if (key === MOUSE_BINDING) return t.keybind.mouse;
   return key === " " ? "SPACE" : key.toUpperCase();
 }
 
@@ -1256,7 +1257,7 @@ function keybindButtonHtml(slot: BindableSlot, label: string): string {
   const waiting = awaitingRebindSlot === slot;
   return `<button type="button" class="keybind-btn${waiting ? " waiting" : ""}" data-slot="${slot}">
     <span class="keybind-lane-label">${label}</span>
-    <span class="keybind-key-label">${waiting ? "입력 대기…" : displayKeyLabel(keyBindings[slot])}</span>
+    <span class="keybind-key-label">${waiting ? t.keybind.awaitingInput : displayKeyLabel(keyBindings[slot])}</span>
   </button>`;
 }
 
@@ -1284,7 +1285,7 @@ function finishRebind(slot: BindableSlot, rawKey: string): void {
     keyBindings = result.bindings;
     keybindError.hidden = true;
   } else {
-    keybindError.textContent = result.reason ?? "";
+    keybindError.textContent = result.errorCode === undefined ? "" : t.keybind.errors[result.errorCode];
     keybindError.hidden = false;
   }
   renderKeybindButtons();
@@ -1344,7 +1345,7 @@ optionScratchSideCheckbox.addEventListener("change", updateScratchSideLayout);
 // 위치가 동일해 테스트가 일관됨).
 const CALIBRATION_KEY = " ";
 const CALIBRATION_BEAT_INTERVAL_MS = 60000 / CALIBRATION_BPM;
-const CALIBRATION_COUNTDOWN_STEPS = ["3", "2", "1", "시작!"] as const;
+const CALIBRATION_COUNTDOWN_STEPS = ["3", "2", "1", t.calibration.countdownGo] as const;
 const CALIBRATION_COUNTDOWN_STEP_MS = 500;
 const CALIBRATION_BEAT_FLASH_WINDOW_MS = 60;
 
@@ -1469,7 +1470,7 @@ async function runCalibrationStage(
   stage: CalibrationStage,
 ): Promise<CalibrationTestResult | null> {
   calibrationStageLabel.textContent =
-    stage === "visual" ? "1/2 시각 테스트 (소리 없음)" : "2/2 오디오 테스트 (소리 있음)";
+    stage === "visual" ? t.calibration.stageVisual : t.calibration.stageAudio;
   calibrationCtx.clearRect(0, 0, calibrationCanvas.width, calibrationCanvas.height);
 
   const countdownOk = await runCalibrationCountdown(token);
@@ -1559,13 +1560,18 @@ function showCalibrationResult(
 
   const currentInput = Number(optionInputOffsetInput.value) || 0;
   const currentAudio = Number(optionAudioOffsetInput.value) || 0;
-  calibrationResultInput.textContent = `현재 ${currentInput}ms → 제안 ${suggestedInputOffsetMsValue}ms`;
-  calibrationResultAudio.textContent = `현재 ${currentAudio}ms → 제안 ${suggestedAudioOffsetMsValue}ms`;
+  calibrationResultInput.textContent = t.calibration.currentToSuggested(currentInput, suggestedInputOffsetMsValue);
+  calibrationResultAudio.textContent = t.calibration.currentToSuggested(currentAudio, suggestedAudioOffsetMsValue);
 
   const insufficient = visualResult.insufficientSamples || audioResult.insufficientSamples;
   calibrationResultWarning.hidden = !insufficient;
   if (insufficient) {
-    calibrationResultWarning.textContent = `표본이 부족합니다(시각 ${visualResult.matchedCount}/${visualResult.totalBeats}, 오디오 ${audioResult.matchedCount}/${audioResult.totalBeats}). 다시 시도해 주세요.`;
+    calibrationResultWarning.textContent = t.calibration.insufficientSamples(
+      visualResult.matchedCount,
+      visualResult.totalBeats,
+      audioResult.matchedCount,
+      audioResult.totalBeats,
+    );
   }
   calibrationApplyBtn.disabled = insufficient;
 }
@@ -1622,9 +1628,7 @@ function updateGasRowVisibility(): void {
 optionGaugeTypeSelect.addEventListener("change", updateGasRowVisibility);
 updateGasRowVisibility();
 
-const GAS_TOOLTIP_TEXT =
-  "Gauge Assist System — 게이지가 0이 되어도 게임을 종료하지 않고 NORMAL게이지로 자동 전환됩니다.";
-gasInfoTooltip.textContent = GAS_TOOLTIP_TEXT;
+gasInfoTooltip.textContent = t.options.gasTooltip;
 
 // 팝업 위치는 마우스 커서에 종속 — 아이콘 위에서 움직이는 동안 계속 따라간다.
 gasInfoIcon.addEventListener("mouseenter", () => {
@@ -1638,9 +1642,7 @@ gasInfoIcon.addEventListener("mouseleave", () => {
   gasInfoTooltip.hidden = true;
 });
 
-const NOTE_SPEED_TOOLTIP_TEXT =
-  "노트가 내려오는 속도를 조절합니다. 50부터 1500까지 설정 가능하고, 숫자가 작을수록 속도가 빠릅니다.";
-noteSpeedInfoTooltip.textContent = NOTE_SPEED_TOOLTIP_TEXT;
+noteSpeedInfoTooltip.textContent = t.options.noteSpeedTooltip;
 
 noteSpeedInfoIcon.addEventListener("mouseenter", () => {
   noteSpeedInfoTooltip.hidden = false;
@@ -1713,7 +1715,7 @@ optionSavePresetBtn.addEventListener("click", () => {
   localStorage.setItem(PRESET_STORAGE_KEY, serializePresets(presetSlots));
 
   const original = optionSavePresetBtn.textContent;
-  optionSavePresetBtn.textContent = "저장됨";
+  optionSavePresetBtn.textContent = t.options.savedFeedback;
   setTimeout(() => {
     optionSavePresetBtn.textContent = original;
   }, 1000);
@@ -1843,7 +1845,7 @@ function renderSongList(): void {
               return `<div class="level-block level-${d}${isActiveLevelBlock(song.id, d) ? " active" : ""}" data-difficulty="${d}"><span class="level-block-label">${DIFFICULTY_LABEL[d]}</span><span class="level-block-value">${level}</span></div>`;
             }).join("")}
           </div>
-          ${isImportedSong(song.id) ? `<div class="song-item-delete-btn" data-song-id="${song.id}">삭제</div>` : ""}
+          ${isImportedSong(song.id) ? `<div class="song-item-delete-btn" data-song-id="${song.id}">${t.songSelect.delete}</div>` : ""}
         </div>
       </button>`,
     )
@@ -1851,8 +1853,8 @@ function renderSongList(): void {
 
   songListEl.innerHTML = `${songsHtml}
     <div class="song-import-row">
-      <button type="button" class="song-import-btn" id="song-import-btn">+ 채보 추가</button>
-      <button type="button" class="song-refresh-btn" id="song-refresh-btn" title="곡 목록 새로고침">⟳</button>
+      <button type="button" class="song-import-btn" id="song-import-btn">${t.songSelect.addChart}</button>
+      <button type="button" class="song-refresh-btn" id="song-refresh-btn" title="${t.songSelect.refreshTitle}">⟳</button>
     </div>`;
 }
 
@@ -1866,7 +1868,10 @@ function renderPopupDifficultyButtons(song: SongEntry): void {
 }
 
 // 미러 옵션 토글(팝업). "정배/미러"보다 포괄적으로 읽히도록 ON/OFF 표기로 통일.
-const MIRROR_LABEL: Readonly<Record<Arrangement, string>> = { normal: "미러 OFF", mirror: "미러 ON" };
+const MIRROR_LABEL: Readonly<Record<Arrangement, string>> = {
+  normal: t.songSelect.mirrorOff,
+  mirror: t.songSelect.mirrorOn,
+};
 
 function updateMirrorToggleLabel(): void {
   songPopupMirrorToggle.textContent = MIRROR_LABEL[selectedArrangement];
@@ -1977,7 +1982,7 @@ importZipInput.addEventListener("change", async () => {
     await refreshSongList();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    showSongImportError(`채보 임포트 실패: ${message}`);
+    showSongImportError(t.songSelect.importFailed(message));
   }
 });
 
@@ -2086,7 +2091,7 @@ document.addEventListener("click", (event) => {
 songPopupStartBtn.addEventListener("click", async () => {
   if (selectedSongId === null) return;
   songPopupStartBtn.disabled = true;
-  songPopupStartBtn.textContent = "실행 중";
+  songPopupStartBtn.textContent = t.songSelect.starting;
 
   const song = findSong(selectedSongId);
   chart = parseChart(song.chartRawByDifficulty[selectedDifficulty]);
@@ -2103,7 +2108,7 @@ songPopupStartBtn.addEventListener("click", async () => {
   await startPlay();
 
   songPopupStartBtn.disabled = false;
-  songPopupStartBtn.textContent = "시작";
+  songPopupStartBtn.textContent = t.songSelect.start;
 });
 
 function goToSongSelect(): void {

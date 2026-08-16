@@ -58,7 +58,7 @@ describe("rebindKey", () => {
   it("다른 레인이 이미 쓰는 키로는 재배정할 수 없다", () => {
     const result = rebindKey(fullBindings(), 0, "s", RESERVED_KEYS);
     expect(result.ok).toBe(false);
-    expect(result.reason).toMatch(/이미 쓰는/);
+    expect(result.errorCode).toBe("duplicateKey");
   });
 
   it("자기 자신이 쓰던 키로 다시 배정하는 건 허용한다", () => {

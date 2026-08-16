@@ -55,10 +55,14 @@ export function bindingsToKeymap(bindings: Readonly<KeyBindings>): Record<string
   return keymap;
 }
 
+// 거부 사유는 표시 문구가 아니라 코드로 반환한다 — 순수 로직 모듈이 UI 언어를
+// 알 필요가 없어야 하기 때문(SPEC.md 10절). 문구 변환은 main.ts가 i18n 테이블로 한다.
+export type RebindErrorCode = "laneCannotUseMouse" | "reservedKey" | "duplicateKey";
+
 export interface RebindResult {
   bindings: KeyBindings;
   ok: boolean;
-  reason?: string;
+  errorCode?: RebindErrorCode;
 }
 
 // slot에 rawKey(또는 스크래치 슬롯이라면 MOUSE_BINDING)를 새로 배정한다.
@@ -73,7 +77,7 @@ export function rebindKey(
 ): RebindResult {
   if (rawKey === MOUSE_BINDING) {
     if (isLaneSlot(slot)) {
-      return { bindings: bindings as KeyBindings, ok: false, reason: "레인은 마우스로 설정할 수 없습니다." };
+      return { bindings: bindings as KeyBindings, ok: false, errorCode: "laneCannotUseMouse" };
     }
     return { bindings: { ...bindings, [slot]: MOUSE_BINDING }, ok: true };
   }
@@ -81,14 +85,14 @@ export function rebindKey(
   const newKey = normalizeKey(rawKey);
 
   if (reservedKeys.some((reserved) => normalizeKey(reserved) === newKey)) {
-    return { bindings: bindings as KeyBindings, ok: false, reason: "다른 기능에 이미 쓰이는 키입니다." };
+    return { bindings: bindings as KeyBindings, ok: false, errorCode: "reservedKey" };
   }
 
   const conflictSlot = ALL_BINDABLE_SLOTS.find(
     (s) => s !== slot && bindings[s] !== MOUSE_BINDING && normalizeKey(bindings[s]) === newKey,
   );
   if (conflictSlot !== undefined) {
-    return { bindings: bindings as KeyBindings, ok: false, reason: "다른 항목이 이미 쓰는 키입니다." };
+    return { bindings: bindings as KeyBindings, ok: false, errorCode: "duplicateKey" };
   }
 
   return { bindings: { ...bindings, [slot]: newKey }, ok: true };
