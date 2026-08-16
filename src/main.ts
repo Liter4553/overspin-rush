@@ -166,7 +166,7 @@ app.innerHTML = `
   <h1>Overspin RUSH</h1>
 
   <div id="song-select-view">
-    <h2>선곡</h2>
+    <h2>곡 선택</h2>
     <div class="song-list" id="song-list"></div>
     <div class="song-import-error" id="song-import-error" hidden></div>
     <input type="file" id="import-zip-input" accept=".zip,application/zip" hidden />
@@ -370,7 +370,7 @@ app.innerHTML = `
   </div>
 
   <div class="results-panel" id="results-panel" hidden>
-    <h2>결과</h2>
+    <h2>RESULT</h2>
     <div class="clear-grade-badge" id="clear-grade-badge"></div>
     <div class="gauge-bar-wrap" id="result-gauge-bar-wrap">
       <span class="gauge-bar-type" id="result-gauge-bar-type">NORMAL</span>
@@ -394,7 +394,7 @@ app.innerHTML = `
     </div>
     <div class="results-buttons">
       <button id="restart-btn">다시하기</button>
-      <button id="results-song-select-btn">선곡</button>
+      <button id="results-song-select-btn">곡 선택</button>
     </div>
   </div>
 `;
@@ -1865,8 +1865,8 @@ function renderPopupDifficultyButtons(song: SongEntry): void {
     .join("");
 }
 
-// 미러 옵션 토글(팝업). "정배/미러"보다 포괄적으로 읽히도록 켬/끔 표기로 통일.
-const MIRROR_LABEL: Readonly<Record<Arrangement, string>> = { normal: "미러 끔", mirror: "미러 켬" };
+// 미러 옵션 토글(팝업). "정배/미러"보다 포괄적으로 읽히도록 ON/OFF 표기로 통일.
+const MIRROR_LABEL: Readonly<Record<Arrangement, string>> = { normal: "미러 OFF", mirror: "미러 ON" };
 
 function updateMirrorToggleLabel(): void {
   songPopupMirrorToggle.textContent = MIRROR_LABEL[selectedArrangement];
