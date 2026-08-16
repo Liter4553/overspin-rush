@@ -196,6 +196,8 @@ export function parsePattern(text: string): Chart {
     level: Number(meta.level),
     timeSignatures,
     bpmChanges,
+    // 틱 기준 원본을 그대로 넘긴다. ms로 환산했다가 되돌리면 BPM 변경 경계에서 오차가 생긴다.
+    bpmChangeTicks: tickBpmChanges,
     notes,
   });
 }

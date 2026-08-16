@@ -1,5 +1,31 @@
-import type { BpmChange, Chart, ChartNote, NoteLane, NoteType } from "./types";
+import type { BpmChange, Chart, ChartNote, NoteLane, NoteType, TickBpmChange } from "./types";
 import { isValidDenominator, type TimeSignature } from "./timeSignature";
+import { PATTERN_TICKS_PER_BEAT } from "../config";
+
+function parseTickBpmChange(value: unknown, index: number): TickBpmChange {
+  const item = asRecord(value, `bpmChangeTicks[${index}]`);
+  if (typeof item.tick !== "number") throw new Error(`bpmChangeTicks[${index}].tick은 숫자여야 합니다.`);
+  if (typeof item.bpm !== "number") throw new Error(`bpmChangeTicks[${index}].bpm은 숫자여야 합니다.`);
+  return { tick: item.tick, bpm: item.bpm };
+}
+
+// ms 기준 BPM 목록을 틱 기준으로 환산한다. 각 구간의 ms 길이를 그 구간 BPM의 틱 길이로
+// 나눠 누적하므로, 구간 경계가 틱 공간에서도 정확히 보존된다.
+function msBpmChangesToTickBpmChanges(bpmChanges: readonly BpmChange[]): TickBpmChange[] {
+  const result: TickBpmChange[] = [];
+  let tick = 0;
+
+  bpmChanges.forEach((change, index) => {
+    if (index > 0) {
+      const prev = bpmChanges[index - 1];
+      const msPerTick = 60000 / prev.bpm / PATTERN_TICKS_PER_BEAT;
+      tick += (change.time - prev.time) / msPerTick;
+    }
+    result.push({ tick, bpm: change.bpm });
+  });
+
+  return result;
+}
 
 function parseTimeSignature(value: unknown, index: number): TimeSignature {
   const item = asRecord(value, `timeSignatures[${index}]`);
@@ -96,6 +122,12 @@ export function parseChart(data: unknown): Chart {
     .map(parseTimeSignature)
     .sort((a, b) => a.bar - b.bar);
 
+  // .pattern에서 온 채보는 틱 기준 BPM 목록을 그대로 넘겨준다(정확한 원본).
+  // ms만 있는 JSON 채보는 ms 구간 길이를 틱으로 환산해 만든다.
+  const bpmChangeTicks = Array.isArray(raw.bpmChangeTicks)
+    ? raw.bpmChangeTicks.map(parseTickBpmChange).sort((a, b) => a.tick - b.tick)
+    : msBpmChangesToTickBpmChanges(bpmChanges);
+
   const version = typeof raw.version === "number" ? raw.version : 1;
 
   return {
@@ -105,6 +137,7 @@ export function parseChart(data: unknown): Chart {
     audio: raw.audio,
     offset: raw.offset,
     bpmChanges,
+    bpmChangeTicks,
     level: raw.level,
     holdTickIntervalBeats: raw.holdTickIntervalBeats as number | undefined,
     timeSignatures,

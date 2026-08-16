@@ -282,10 +282,40 @@ level=1
     expect(() => parsePattern(patternText("1:0 beat 3/4\n1:0 beat 4/4"))).toThrow();
   });
 
+  // 회귀 방지: 마디선을 ms 누적으로 걷던 시절, BPM 변경 지점에서 한 틱이 옛 BPM으로
+  // 계산되어 마디선이 노트와 65ms나 어긋난 채 곡 끝까지 남는 버그가 있었다.
+  // 마디 머리에 찍은 노트와 그 마디의 마디선은 같은 틱이므로 항상 정확히 같아야 한다.
+  it("BPM이 바뀌어도 마디 머리의 노트 시각과 마디선 시각이 정확히 일치한다", () => {
+    const text = `
+[meta]
+title=t
+artist=a
+audio=song.ogg
+offset=0
+level=1
+
+[bpm]
+1:0=177
+3:0=100
+
+[notes]
+1:0 0 tap
+2:0 0 tap
+3:0 0 tap
+4:0 0 tap
+5:0 0 tap
+6:0 0 tap
+`;
+    const chart = parsePattern(text);
+    const noteTimes = chart.notes.map((n) => n.time);
+    const barLines = generateBarLineTimesMs(chart.bpmChangeTicks, 60000, chart.timeSignatures);
+    expect(barLines.slice(0, noteTimes.length)).toEqual(noteTimes);
+  });
+
   // .pattern -> 파싱 -> 마디선 생성까지 이어지는, 실제 화면에 보이는 동작.
   it("변박 채보를 넣으면 게임 마디선 간격도 바뀐 박자를 따라간다", () => {
     const chart = parsePattern(patternText("3:0 beat 3/4\n1:0 0 tap"));
-    const times = generateBarLineTimesMs(chart.bpmChanges, 7000, chart.timeSignatures);
+    const times = generateBarLineTimesMs(chart.bpmChangeTicks, 7000, chart.timeSignatures);
     expect(times).toEqual([0, 2000, 4000, 5500, 7000]);
   });
 });

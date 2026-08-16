@@ -1,37 +1,51 @@
 // 마디선(박자 구분선) 시각 계산. 렌더링/DOM과 분리된 순수 함수 (SPEC.md 10절).
-import type { BpmChange, TimeSignature } from "../chart/types";
-import { currentBpm } from "./scroll";
+//
+// 계산은 오직 "박자표(마디당 틱)"와 "틱 기준 BPM 목록"만으로 한다. ms를 조금씩 누적하며
+// 걷는 방식은 절대 쓰지 않는다 — 누적값이 BPM 변경 시각보다 미세하게 모자라면 그 틱에
+// 옛 BPM이 적용되어, 마디선이 노트와 수십 ms씩 어긋난 채 곡 끝까지 남는 버그가 있었다
+// (BPM 177 -> 100 변경에서 65ms 어긋남). 노트와 완전히 같은 absoluteTickToMs를 쓰므로,
+// 같은 틱에 있는 노트와 마디선은 정의상 항상 같은 시각이 된다.
+import { absoluteTickToMs, type TickBpmChange } from "../chart/barTick";
+import type { TimeSignature } from "../chart/types";
 import { signatureAtBar, ticksPerMeasure } from "../chart/timeSignature";
-import { PATTERN_TICKS_PER_BEAT } from "../config";
 
-// 0ms부터 durationMs까지 16분음표(1틱)씩 전진하며 마디 머리마다 시각(ms)을 만든다.
-// 틱 단위로 걸으므로 (1) 곡 도중 BPM이 바뀌어도 그 시점의 BPM이 자연스럽게 반영되고,
-// (2) 마디마다 길이가 다른 변박도 그대로 따라간다 — 마디 길이를 한 번에 계산하면
-// 마디 중간의 BPM 변경을 놓친다.
+// 마디 머리의 절대틱만 만든다(시간 개념이 전혀 없는 순수 박자 계산).
+export function generateBarLineAbsoluteTicks(
+  timeSignatures: readonly TimeSignature[],
+  throughTick: number,
+): number[] {
+  const ticks: number[] = [];
+  let absoluteTick = 0;
+  let bar = 1;
+
+  while (absoluteTick <= throughTick) {
+    ticks.push(absoluteTick);
+    absoluteTick += ticksPerMeasure(signatureAtBar(timeSignatures, bar));
+    bar++;
+  }
+  return ticks;
+}
+
 export function generateBarLineTimesMs(
-  bpmChanges: BpmChange[],
+  bpmChangeTicks: readonly TickBpmChange[],
   durationMs: number,
   timeSignatures: readonly TimeSignature[] = [],
 ): number[] {
+  // BPM이 0 이하면 시간이 전진하지 않아 마디선을 만들 수 없다(무한 루프 방지).
+  // .pattern 파서가 이미 거부하는 값이라 정상 채보에서는 걸리지 않는 방어 조건이다.
+  if (bpmChangeTicks.length === 0 || bpmChangeTicks.some((change) => change.bpm <= 0)) return [];
+
   const times: number[] = [];
-  let timeMs = 0;
+  let absoluteTick = 0;
   let bar = 1;
-  let tickInBar = 0;
-  let measureTicks = ticksPerMeasure(signatureAtBar(timeSignatures, bar));
 
-  while (timeMs <= durationMs) {
-    if (tickInBar === 0) times.push(timeMs);
-
-    const bpm = currentBpm(bpmChanges, timeMs);
-    if (bpm <= 0) break; // BPM이 0이면 시간이 전진하지 않아 무한 루프가 된다.
-    timeMs += 60000 / bpm / PATTERN_TICKS_PER_BEAT;
-
-    tickInBar++;
-    if (tickInBar >= measureTicks) {
-      tickInBar = 0;
-      bar++;
-      measureTicks = ticksPerMeasure(signatureAtBar(timeSignatures, bar));
-    }
+  for (;;) {
+    const timeMs = absoluteTickToMs(absoluteTick, bpmChangeTicks);
+    // BPM이 0 이하면 시각이 무한대가 되어 더 진행할 수 없다(무한 루프 방지).
+    if (!Number.isFinite(timeMs) || timeMs > durationMs) break;
+    times.push(timeMs);
+    absoluteTick += ticksPerMeasure(signatureAtBar(timeSignatures, bar));
+    bar++;
   }
 
   return times;

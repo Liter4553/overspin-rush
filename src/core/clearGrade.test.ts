@@ -12,6 +12,7 @@ function makeChart(noteCount: number): Chart {
     audio: "",
     offset: 0,
     bpmChanges: [{ time: 0, bpm: 150 }],
+    bpmChangeTicks: [{ tick: 0, bpm: 150 }],
     level: 1,
     notes: Array.from({ length: noteCount }, (_, i) => ({ time: i * 400, lane: 0 as const, type: "tap" as const })),
   };

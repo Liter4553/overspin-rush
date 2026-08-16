@@ -1193,7 +1193,7 @@ async function startPlay(): Promise<void> {
   activeChart = buildPlayChart(chart, selectedArrangement);
   recalibrateNoteSpeed(currentBpm(activeChart.bpmChanges, 0)); // 곡 시작 BPM 기준으로 배속을 한 번 고정
   songDurationMs = chartDurationMs(activeChart, AUTO_MISS_WINDOW_MS);
-  barLineTimesMs = generateBarLineTimesMs(activeChart.bpmChanges, songDurationMs, activeChart.timeSignatures);
+  barLineTimesMs = generateBarLineTimesMs(activeChart.bpmChangeTicks, songDurationMs, activeChart.timeSignatures);
   noteTracker = createNoteTracker(activeChart);
   gameState = createGameState();
   gaugeCoefficientA = computeGaugeCoefficient(countJudgeableNotes(activeChart));

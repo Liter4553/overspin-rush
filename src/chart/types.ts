@@ -1,8 +1,9 @@
 // 채보 JSON 스키마. 게임 본체와 (추후 만들) 채보 제작 툴이 공유하는 타입이므로
 // 필드를 늘릴 땐 항상 optional로 추가하고 version을 올려서 하위 호환을 유지한다.
 import type { TimeSignature } from "./timeSignature";
+import type { TickBpmChange } from "./barTick";
 
-export type { TimeSignature };
+export type { TimeSignature, TickBpmChange };
 
 export type NoteLane = 0 | 1 | 2 | "fx" | "scratch";
 export type NoteType = "tap" | "hold";
@@ -27,6 +28,10 @@ export interface Chart {
   audio: string;
   offset: number; // ms, 오디오 시작과 0박 사이 보정
   bpmChanges: BpmChange[]; // time 오름차순 정렬 보장 (parseChart가 정렬함)
+  // 같은 BPM 목록을 틱 기준으로 표현한 것(tick 오름차순). 박자 기준으로 계산해야 하는
+  // 곳(마디선 등)은 ms가 아니라 반드시 이걸 쓴다 — ms를 누적하면 BPM 변경 지점에서
+  // 한 틱이 옛 BPM으로 계산되어 곡 끝까지 어긋나기 때문. parseChart가 항상 채워준다.
+  bpmChangeTicks: TickBpmChange[];
   level: number;
   holdTickIntervalBeats?: number; // 선택. 채보 전체 홀드 틱 간격(비트) 기본값
   // 선택. 박자표 변경 목록(변박 지원). bar 오름차순 정렬 보장(parseChart가 정렬함).

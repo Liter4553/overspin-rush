@@ -33,6 +33,7 @@ function makeChart(notes: Chart["notes"]): Chart {
     audio: "",
     offset: 0,
     bpmChanges: [{ time: 0, bpm: 150 }],
+    bpmChangeTicks: [{ tick: 0, bpm: 150 }],
     level: 1,
     notes,
   };
