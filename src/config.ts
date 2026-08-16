@@ -5,8 +5,9 @@ import type { NoteLane } from "./chart/types";
 // 마일스톤 1 임시 표시용 기본 BPM. 이후 채보 로드 시 bpmChanges로 대체된다.
 export const DEFAULT_BPM = 150;
 
-// .pattern 채보 포맷(SPEC.md 7-1절)의 마디당 틱 수. 1마디(4/4) = 16분음표 16개.
-export const PATTERN_TICKS_PER_MEASURE = 16;
+// .pattern 채보 포맷(SPEC.md 7-1절)의 틱 해상도. 1박(4분음표) = 16분음표 4개로 고정이고,
+// 마디당 틱 수는 박자표에 따라 beatsPerMeasure * 이 값으로 유도한다(4/4면 16틱).
+export const PATTERN_TICKS_PER_BEAT = 4;
 
 // --- 캔버스 / 레인 레이아웃 (SPEC.md 6절) ---
 export const CANVAS_HEIGHT = 800;

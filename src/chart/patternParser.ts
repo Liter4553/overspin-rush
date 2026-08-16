@@ -4,6 +4,7 @@
 import type { Chart, NoteLane, NoteType } from "./types";
 import { parseChart } from "./parseChart";
 import { absoluteTickToMs, barTickToAbsoluteTick, type BarTick, type TickBpmChange } from "./barTick";
+import { DEFAULT_BEATS_PER_MEASURE } from "../config";
 
 const SECTION_HEADER = /^\[(\w+)\]$/;
 const REQUIRED_META_KEYS = ["title", "artist", "audio", "offset", "level"] as const;
@@ -54,7 +55,7 @@ function parseMeta(lines: string[]): Record<string, string> {
   return meta;
 }
 
-function parseBpmSection(lines: string[]): TickBpmChange[] {
+function parseBpmSection(lines: string[], beatsPerMeasure: number): TickBpmChange[] {
   if (lines.length === 0) throw new Error("[bpm] 섹션에는 최소 1개의 BPM이 필요합니다.");
 
   const changes = lines.map((line) => {
@@ -63,10 +64,20 @@ function parseBpmSection(lines: string[]): TickBpmChange[] {
     const barTick = parseBarTick(line.slice(0, eq).trim(), "[bpm]");
     const bpm = Number(line.slice(eq + 1).trim());
     if (!Number.isFinite(bpm) || bpm <= 0) throw new Error(`[bpm]: BPM 값이 올바르지 않습니다: "${line}"`);
-    return { tick: barTickToAbsoluteTick(barTick), bpm };
+    return { tick: barTickToAbsoluteTick(barTick, beatsPerMeasure), bpm };
   });
 
   return changes.sort((a, b) => a.tick - b.tick);
+}
+
+// [meta] beatsPerMeasure는 선택 필드다. 생략하면 4/4로 동작하므로 기존 채보는 그대로 호환된다.
+function parseBeatsPerMeasure(raw: string | undefined): number {
+  if (raw === undefined) return DEFAULT_BEATS_PER_MEASURE;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`[meta]: beatsPerMeasure는 1 이상의 정수여야 합니다: "${raw}"`);
+  }
+  return value;
 }
 
 function toNoteLane(token: string, context: string): NoteLane {
@@ -87,7 +98,11 @@ interface PatternNote {
   duration?: number;
 }
 
-function parseNotesSection(lines: string[], tickBpmChanges: TickBpmChange[]): PatternNote[] {
+function parseNotesSection(
+  lines: string[],
+  tickBpmChanges: TickBpmChange[],
+  beatsPerMeasure: number,
+): PatternNote[] {
   return lines.map((line, index) => {
     const context = `[notes] 줄 ${index + 1}`;
     const tokens = line.split(/\s+/);
@@ -98,7 +113,7 @@ function parseNotesSection(lines: string[], tickBpmChanges: TickBpmChange[]): Pa
     const barTick = parseBarTick(barTickToken, context);
     const lane = toNoteLane(laneToken, context);
     const type = toNoteType(typeToken, context);
-    const absoluteTick = barTickToAbsoluteTick(barTick);
+    const absoluteTick = barTickToAbsoluteTick(barTick, beatsPerMeasure);
     const time = absoluteTickToMs(absoluteTick, tickBpmChanges);
 
     if (type === "hold") {
@@ -130,8 +145,9 @@ export function parsePattern(text: string): Chart {
     if (meta[key] === undefined) throw new Error(`[meta]: "${key}" 필드가 필요합니다.`);
   }
 
-  const tickBpmChanges = parseBpmSection(sections.bpm);
-  const notes = parseNotesSection(sections.notes, tickBpmChanges);
+  const beatsPerMeasure = parseBeatsPerMeasure(meta.beatsPerMeasure);
+  const tickBpmChanges = parseBpmSection(sections.bpm, beatsPerMeasure);
+  const notes = parseNotesSection(sections.notes, tickBpmChanges, beatsPerMeasure);
   const bpmChanges = tickBpmChanges.map((change) => ({
     time: absoluteTickToMs(change.tick, tickBpmChanges),
     bpm: change.bpm,
@@ -143,6 +159,7 @@ export function parsePattern(text: string): Chart {
     audio: meta.audio,
     offset: Number(meta.offset),
     level: Number(meta.level),
+    beatsPerMeasure,
     bpmChanges,
     notes,
   });

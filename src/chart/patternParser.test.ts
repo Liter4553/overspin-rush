@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parsePattern } from "./patternParser";
 import { parseChart } from "./parseChart";
+import { generateBarLineTimesMs } from "../core/barLines";
 import { dummyChartRaw } from "./dummyChart";
 
 // dummyChartRaw(ms 기준)를 그대로 .pattern(마디:틱 기준) 문법으로 옮겨 쓴 버전.
@@ -180,5 +181,80 @@ artist=a
 1:0 0 tap
 `;
     expect(() => parsePattern(text)).toThrow();
+  });
+});
+
+describe("parsePattern - 박자표(beatsPerMeasure)", () => {
+  function patternText(metaExtra: string, notes: string): string {
+    return `
+[meta]
+title=t
+artist=a
+audio=song.ogg
+offset=0
+level=1
+${metaExtra}
+
+[bpm]
+1:0=120
+
+[notes]
+${notes}
+`;
+  }
+
+  it("생략하면 4/4로 동작한다(마디당 16틱)", () => {
+    // BPM 120 -> 1박 500ms, 1틱 125ms. 2마디 0틱 = 절대틱 16 = 2000ms.
+    const chart = parsePattern(patternText("", "2:0 0 tap"));
+    expect(chart.beatsPerMeasure).toBe(4);
+    expect(chart.notes[0].time).toBeCloseTo(2000);
+  });
+
+  it("3/4면 마디당 12틱이라 2마디 0틱이 1500ms가 된다", () => {
+    const chart = parsePattern(patternText("beatsPerMeasure=3", "2:0 0 tap"));
+    expect(chart.beatsPerMeasure).toBe(3);
+    expect(chart.notes[0].time).toBeCloseTo(1500);
+  });
+
+  it("[bpm] 섹션의 마디:틱에도 같은 박자표가 적용된다", () => {
+    // 3/4에서 2마디 0틱 = 절대틱 12 = 1500ms 지점부터 BPM 240으로 변경.
+    const text = `
+[meta]
+title=t
+artist=a
+audio=song.ogg
+offset=0
+level=1
+beatsPerMeasure=3
+
+[bpm]
+1:0=120
+2:0=240
+
+[notes]
+1:0 0 tap
+`;
+    const chart = parsePattern(text);
+    expect(chart.bpmChanges[1].time).toBeCloseTo(1500);
+  });
+
+  it("홀드 duration은 박자표와 무관하게 틱 단위 그대로 계산된다", () => {
+    // BPM 120에서 1틱 = 125ms. duration 4틱 = 500ms.
+    const chart = parsePattern(patternText("beatsPerMeasure=3", "1:0 0 hold 4"));
+    expect(chart.notes[0].duration).toBeCloseTo(500);
+  });
+
+  it("1 미만이거나 정수가 아니면 에러를 던진다", () => {
+    expect(() => parsePattern(patternText("beatsPerMeasure=0", "1:0 0 tap"))).toThrow();
+    expect(() => parsePattern(patternText("beatsPerMeasure=2.5", "1:0 0 tap"))).toThrow();
+    expect(() => parsePattern(patternText("beatsPerMeasure=abc", "1:0 0 tap"))).toThrow();
+  });
+
+  // .pattern -> 파싱 -> 마디선 생성까지 이어지는 실제 사용자 눈에 보이는 동작.
+  it("3/4 채보를 넣으면 게임 마디선이 4박이 아니라 3박마다 그어진다", () => {
+    const chart = parsePattern(patternText("beatsPerMeasure=3", "1:0 0 tap"));
+    // BPM 120 -> 1박 500ms. 3/4면 마디선 간격이 1500ms여야 한다.
+    const times = generateBarLineTimesMs(chart.bpmChanges, 4500, chart.beatsPerMeasure);
+    expect(times).toEqual([0, 1500, 3000, 4500]);
   });
 });

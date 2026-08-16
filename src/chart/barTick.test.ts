@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { absoluteTickToMs, barTickToAbsoluteTick, barTickToMs } from "./barTick";
+import { absoluteTickToMs, barTickToAbsoluteTick, barTickToMs, ticksPerMeasure } from "./barTick";
 
 describe("barTickToAbsoluteTick", () => {
   it("1마디 0틱은 절대틱 0", () => {
@@ -12,6 +12,28 @@ describe("barTickToAbsoluteTick", () => {
 
   it("3마디 4틱은 절대틱 36", () => {
     expect(barTickToAbsoluteTick({ bar: 3, tick: 4 })).toBe(36);
+  });
+
+  // 박자표(beatsPerMeasure)에 따라 마디 길이가 달라진다. 1틱=16분음표는 그대로다.
+  it("3/4에서는 마디당 12틱이라 2마디 0틱이 절대틱 12", () => {
+    expect(barTickToAbsoluteTick({ bar: 2, tick: 0 }, 3)).toBe(12);
+    expect(barTickToAbsoluteTick({ bar: 3, tick: 0 }, 3)).toBe(24);
+  });
+
+  it("7/4에서는 마디당 28틱", () => {
+    expect(barTickToAbsoluteTick({ bar: 2, tick: 0 }, 7)).toBe(28);
+  });
+
+  it("beatsPerMeasure를 생략하면 4/4(마디당 16틱)로 동작한다", () => {
+    expect(barTickToAbsoluteTick({ bar: 2, tick: 0 })).toBe(barTickToAbsoluteTick({ bar: 2, tick: 0 }, 4));
+  });
+});
+
+describe("ticksPerMeasure", () => {
+  it("박자표 분자 × 4틱", () => {
+    expect(ticksPerMeasure(4)).toBe(16);
+    expect(ticksPerMeasure(3)).toBe(12);
+    expect(ticksPerMeasure()).toBe(16);
   });
 });
 
