@@ -1,4 +1,21 @@
 import type { BpmChange, Chart, ChartNote, NoteLane, NoteType } from "./types";
+import { isValidDenominator, type TimeSignature } from "./timeSignature";
+
+function parseTimeSignature(value: unknown, index: number): TimeSignature {
+  const item = asRecord(value, `timeSignatures[${index}]`);
+  if (!Number.isInteger(item.bar) || (item.bar as number) < 1) {
+    throw new Error(`timeSignatures[${index}].bar는 1 이상의 정수여야 합니다.`);
+  }
+  if (!Number.isInteger(item.numerator) || (item.numerator as number) < 1) {
+    throw new Error(`timeSignatures[${index}].numerator는 1 이상의 정수여야 합니다.`);
+  }
+  if (typeof item.denominator !== "number" || !isValidDenominator(item.denominator)) {
+    throw new Error(
+      `timeSignatures[${index}].denominator는 1/2/4/8/16 중 하나여야 합니다: ${String(item.denominator)}`,
+    );
+  }
+  return { bar: item.bar as number, numerator: item.numerator as number, denominator: item.denominator };
+}
 
 function isNoteLane(value: unknown): value is NoteLane {
   return value === 0 || value === 1 || value === 2 || value === "fx" || value === "scratch";
@@ -63,11 +80,8 @@ export function parseChart(data: unknown): Chart {
   if (raw.holdTickIntervalBeats !== undefined && typeof raw.holdTickIntervalBeats !== "number") {
     throw new Error("holdTickIntervalBeats는 숫자여야 합니다.");
   }
-  if (raw.beatsPerMeasure !== undefined) {
-    if (typeof raw.beatsPerMeasure !== "number") throw new Error("beatsPerMeasure는 숫자여야 합니다.");
-    if (!Number.isInteger(raw.beatsPerMeasure) || raw.beatsPerMeasure < 1) {
-      throw new Error("beatsPerMeasure는 1 이상의 정수여야 합니다.");
-    }
+  if (raw.timeSignatures !== undefined && !Array.isArray(raw.timeSignatures)) {
+    throw new Error("timeSignatures는 배열이어야 합니다.");
   }
 
   const bpmChanges = raw.bpmChanges
@@ -77,6 +91,10 @@ export function parseChart(data: unknown): Chart {
   const notes = raw.notes
     .map(parseNote)
     .sort((a, b) => a.time - b.time);
+
+  const timeSignatures = (Array.isArray(raw.timeSignatures) ? raw.timeSignatures : [])
+    .map(parseTimeSignature)
+    .sort((a, b) => a.bar - b.bar);
 
   const version = typeof raw.version === "number" ? raw.version : 1;
 
@@ -89,7 +107,7 @@ export function parseChart(data: unknown): Chart {
     bpmChanges,
     level: raw.level,
     holdTickIntervalBeats: raw.holdTickIntervalBeats as number | undefined,
-    beatsPerMeasure: raw.beatsPerMeasure as number | undefined,
+    timeSignatures,
     notes,
   };
 }

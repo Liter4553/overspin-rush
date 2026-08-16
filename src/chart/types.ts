@@ -1,5 +1,8 @@
 // 채보 JSON 스키마. 게임 본체와 (추후 만들) 채보 제작 툴이 공유하는 타입이므로
 // 필드를 늘릴 땐 항상 optional로 추가하고 version을 올려서 하위 호환을 유지한다.
+import type { TimeSignature } from "./timeSignature";
+
+export type { TimeSignature };
 
 export type NoteLane = 0 | 1 | 2 | "fx" | "scratch";
 export type NoteType = "tap" | "hold";
@@ -26,8 +29,9 @@ export interface Chart {
   bpmChanges: BpmChange[]; // time 오름차순 정렬 보장 (parseChart가 정렬함)
   level: number;
   holdTickIntervalBeats?: number; // 선택. 채보 전체 홀드 틱 간격(비트) 기본값
-  // 선택. 한 마디에 들어가는 박(4분음표) 수 = 박자표의 분자. 생략 시 config.ts 기본값(4/4).
-  // 마디선 렌더링에 쓰이며, 추후 채보 에디터가 이 값을 바꾸면 그대로 반영된다.
-  beatsPerMeasure?: number;
+  // 선택. 박자표 변경 목록(변박 지원). bar 오름차순 정렬 보장(parseChart가 정렬함).
+  // 없거나 비어 있으면 전 구간 4/4. 각 항목은 그 마디부터 다음 변경 전까지 적용된다.
+  // 마디:틱 -> ms 변환과 마디선 간격에 모두 쓰인다.
+  timeSignatures?: TimeSignature[];
   notes: ChartNote[]; // time 오름차순 정렬 보장 (parseChart가 정렬함)
 }
