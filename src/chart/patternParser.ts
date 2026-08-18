@@ -122,6 +122,7 @@ function toNoteType(token: string, context: string): NoteType {
 
 interface PatternNote {
   time: number;
+  tick: number; // 절대틱. 박자 기준 계산(홀드 틱 등)이 ms를 되돌리지 않아도 되게 그대로 넘긴다.
   lane: NoteLane;
   type: NoteType;
   duration?: number;
@@ -158,13 +159,13 @@ function parseNotesSection(
         throw new Error(`${context}: duration은 양의 정수(틱)여야 합니다: "${durationToken}"`);
       }
       const endMs = absoluteTickToMs(absoluteTick + durationTicks, tickBpmChanges);
-      return { time, lane, type, duration: endMs - time };
+      return { time, tick: absoluteTick, lane, type, duration: endMs - time };
     }
 
     if (durationToken !== undefined) {
       throw new Error(`${context}: tap 노트에는 duration을 붙일 수 없습니다.`);
     }
-    return { time, lane, type };
+    return { time, tick: absoluteTick, lane, type };
   });
 }
 

@@ -10,6 +10,10 @@ export type NoteType = "tap" | "hold";
 
 export interface ChartNote {
   time: number; // ms, 오디오 시작 기준
+  // 선택. 이 노트의 절대틱(16분음표 단위). .pattern에서 온 채보는 항상 정수로 들어 있고,
+  // ms만 있는 JSON 채보는 parseChart가 역산해 채운다. 박자 기준으로 계산해야 하는 곳
+  // (홀드 틱 등)은 time(ms)이 아니라 이 값을 기준으로 삼는다.
+  tick?: number;
   lane: NoteLane;
   type: NoteType;
   duration?: number; // ms, hold 노트에서만 사용

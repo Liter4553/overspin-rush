@@ -1,5 +1,6 @@
 import type { BpmChange, Chart, ChartNote, NoteLane, NoteType, TickBpmChange } from "./types";
 import { isValidDenominator, type TimeSignature } from "./timeSignature";
+import { msToAbsoluteTick } from "./barTick";
 import { PATTERN_TICKS_PER_BEAT } from "../config";
 
 function parseTickBpmChange(value: unknown, index: number): TickBpmChange {
@@ -82,13 +83,19 @@ function parseNote(value: unknown, index: number): ChartNote {
     }
     return {
       time: item.time,
+      tick: typeof item.tick === "number" ? item.tick : undefined,
       lane: item.lane,
       type: item.type,
       duration: item.duration,
       tickIntervalBeats: item.tickIntervalBeats as number | undefined,
     };
   }
-  return { time: item.time, lane: item.lane, type: item.type };
+  return {
+    time: item.time,
+    tick: typeof item.tick === "number" ? item.tick : undefined,
+    lane: item.lane,
+    type: item.type,
+  };
 }
 
 // 채보 JSON을 파싱하며 스키마를 런타임에 강제한다.
@@ -114,7 +121,7 @@ export function parseChart(data: unknown): Chart {
     .map(parseBpmChange)
     .sort((a, b) => a.time - b.time);
 
-  const notes = raw.notes
+  const parsedNotes = raw.notes
     .map(parseNote)
     .sort((a, b) => a.time - b.time);
 
@@ -127,6 +134,12 @@ export function parseChart(data: unknown): Chart {
   const bpmChangeTicks = Array.isArray(raw.bpmChangeTicks)
     ? raw.bpmChangeTicks.map(parseTickBpmChange).sort((a, b) => a.tick - b.tick)
     : msBpmChangesToTickBpmChanges(bpmChanges);
+
+  // 박자 기준 계산(홀드 틱 등)이 ms를 되돌리지 않아도 되도록, tick이 없는 노트는 여기서 채운다.
+  // .pattern에서 온 노트는 이미 정확한 정수 틱을 갖고 있으므로 그대로 둔다.
+  const notes = parsedNotes.map((note) =>
+    note.tick === undefined ? { ...note, tick: msToAbsoluteTick(note.time, bpmChangeTicks) } : note,
+  );
 
   const version = typeof raw.version === "number" ? raw.version : 1;
 

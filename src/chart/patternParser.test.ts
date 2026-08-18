@@ -67,7 +67,7 @@ level=1
 `;
     const chart = parsePattern(text);
     expect(chart.title).toBe("t");
-    expect(chart.notes).toEqual([{ time: 0, lane: 0, type: "tap" }]);
+    expect(chart.notes).toEqual([{ time: 0, tick: 0, lane: 0, type: "tap" }]);
   });
 
   it("BPM이 도중에 바뀌면 이후 노트 타이밍에 반영된다", () => {

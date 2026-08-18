@@ -13,7 +13,7 @@ import { addKeyBeam, drawKeyBeams, pruneExpiredKeyBeams, type KeyBeam } from "./
 import { applyAutoMiss, createNoteTracker, findNearestPendingNote, markJudged } from "./core/noteState";
 import { applyHoldTick, applyJudgement, createGameState } from "./core/gameState";
 import { computeErrorMs, displaySign, judge } from "./core/judge";
-import { advanceHoldTicks, computeTickIntervalMs, startActiveHold, type ActiveHold } from "./core/holdState";
+import { advanceHoldTicks, computeTickIntervalTicks, startActiveHold, type ActiveHold } from "./core/holdState";
 import { clampNoteSpeed, fallTimeMsForNoteSpeed, scaleFallTimeMsForCurrentBpm } from "./core/speedOptions";
 import { applyArrangement, type Arrangement } from "./core/laneArrangement";
 import {
@@ -876,13 +876,11 @@ function judgeAndApply(lane: NoteLane, inputTimeMs: number, source: TickSource):
   // 홀드는 시작 판정 1회뿐(SPEC.md 3절) — 이후 누르고 있는 동안의 틱은 여기서 활성화만
   // 등록해두고, 실제 발생은 renderLoop가 매 프레임 audioClock 시각으로 계산한다.
   if (found.note.type === "hold") {
-    const tickIntervalMs = computeTickIntervalMs(
-      activeChart.bpmChanges,
-      found.note.time,
+    const intervalTicks = computeTickIntervalTicks(
       found.note.tickIntervalBeats,
       activeChart.holdTickIntervalBeats,
     );
-    activeHolds.set(lane, startActiveHold(found.note, tickIntervalMs));
+    activeHolds.set(lane, startActiveHold(found.note, intervalTicks, activeChart.bpmChangeTicks));
   }
 
   judgmentTicks = addJudgmentTick(judgmentTicks, {
@@ -1069,7 +1067,7 @@ document.addEventListener("mousemove", handleMouseMove);
 // 활성 홀드마다 놓친 틱을 캐치업 처리하고, 끝(endTimeMs)을 지난 홀드는 맵에서 정리한다.
 function processHoldTicks(currentTimeMs: number): void {
   for (const [lane, hold] of activeHolds) {
-    const { hold: nextHold, tickCount, expired } = advanceHoldTicks(hold, currentTimeMs);
+    const { hold: nextHold, tickCount, expired } = advanceHoldTicks(hold, currentTimeMs, activeChart.bpmChangeTicks);
     if (expired) {
       activeHolds.delete(lane);
       continue;

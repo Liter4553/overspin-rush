@@ -45,6 +45,26 @@ export function absoluteTickToMs(absoluteTick: number, tickBpmChanges: readonly 
   return ms;
 }
 
+// absoluteTickToMs의 역변환. ms만 있는 JSON 채보에서 노트의 절대틱을 복원할 때 쓴다.
+// .pattern 채보는 애초에 틱이 원본이므로 이 함수를 거치지 않는다.
+export function msToAbsoluteTick(ms: number, tickBpmChanges: readonly TickBpmChange[]): number {
+  if (tickBpmChanges.length === 0) throw new Error("tickBpmChanges는 최소 1개 필요합니다.");
+
+  let accMs = 0;
+  let prevTick = 0;
+  let prevBpm = tickBpmChanges[0].bpm;
+
+  for (const change of tickBpmChanges) {
+    const segmentMs = (change.tick - prevTick) * msPerTick(prevBpm);
+    if (accMs + segmentMs > ms) break; // 목표 시각이 이 구간 안에 있다.
+    accMs += segmentMs;
+    prevTick = change.tick;
+    prevBpm = change.bpm;
+  }
+
+  return prevTick + (ms - accMs) / msPerTick(prevBpm);
+}
+
 export function barTickToMs(
   barTick: BarTick,
   tickBpmChanges: readonly TickBpmChange[],
