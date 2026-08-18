@@ -4,7 +4,7 @@
 //   분자 * (16 / 분모)
 // 로 유도된다 — 4/4=16틱, 3/4=12틱, 7/8=14틱, 5/16=5틱.
 // 분모는 16을 나누어떨어지게 하는 값만 허용한다(정수 틱으로 떨어져야 하므로).
-import { DEFAULT_TIME_SIGNATURE, TICKS_PER_WHOLE_NOTE, VALID_TIME_SIGNATURE_DENOMINATORS } from "../config";
+import { DEFAULT_TIME_SIGNATURE, TICKS_PER_WHOLE_NOTE, VALID_TIME_SIGNATURE_DENOMINATORS } from "./formatConstants";
 
 export interface TimeSignature {
   bar: number; // 이 박자표가 적용되기 시작하는 마디(1부터). 그 다음 변경 전까지 유지된다.

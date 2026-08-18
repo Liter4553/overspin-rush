@@ -5,11 +5,14 @@ import type { NoteLane } from "./chart/types";
 // 마일스톤 1 임시 표시용 기본 BPM. 이후 채보 로드 시 bpmChanges로 대체된다.
 export const DEFAULT_BPM = 150;
 
-// .pattern 채보 포맷(SPEC.md 7-1절)의 틱 해상도. 1틱 = 16분음표 고정.
-// 온음표 하나가 16틱이므로, 마디당 틱 수는 박자표에서 분자 * (16 / 분모)로 유도된다.
-export const TICKS_PER_WHOLE_NOTE = 16;
-// 4분음표(1박) 하나에 들어가는 틱 수. ms 변환의 기준.
-export const PATTERN_TICKS_PER_BEAT = TICKS_PER_WHOLE_NOTE / 4;
+// .pattern 포맷 상수는 포맷 자체의 일부라 chart 모듈이 소유한다(chart/ 폴더가 게임 코드에
+// 의존하지 않아야 채보 에디터가 그대로 가져다 쓸 수 있다). 게임 코드 편의를 위해 여기서 재수출만 한다.
+export {
+  DEFAULT_TIME_SIGNATURE,
+  PATTERN_TICKS_PER_BEAT,
+  TICKS_PER_WHOLE_NOTE,
+  VALID_TIME_SIGNATURE_DENOMINATORS,
+} from "./chart/formatConstants";
 
 // --- 캔버스 / 레인 레이아웃 (SPEC.md 6절) ---
 export const CANVAS_HEIGHT = 800;
@@ -74,12 +77,8 @@ export const SCRATCH_LANE_TINT_OPACITY = 0.14;
 export const JUDGE_LINE_COLOR = "#D85A30";
 export const LANE_DIVIDER_COLOR = "rgba(255, 255, 255, 0.15)";
 
-// --- 마디선 / 박자표 ---
-// 채보에 박자표 지정이 없을 때(또는 첫 변경 이전 마디에) 쓰는 기본 박자표.
-export const DEFAULT_TIME_SIGNATURE = { numerator: 4, denominator: 4 } as const;
-// 분모는 16틱(온음표)을 정수로 나누어떨어지게 하는 값만 허용한다 — 마디 길이가
-// 정수 틱으로 떨어져야 마디:틱 표기가 성립하기 때문.
-export const VALID_TIME_SIGNATURE_DENOMINATORS: readonly number[] = [1, 2, 4, 8, 16];
+// --- 마디선 ---
+// (박자표 상수는 위에서 chart/formatConstants를 재수출한다)
 // 노트에 묻히지 않으면서 배경보다는 뚜렷하도록, 레인 구분선보다 살짝 밝게.
 export const BAR_LINE_COLOR = "rgba(255, 255, 255, 0.32)";
 export const BAR_LINE_WIDTH = 2;

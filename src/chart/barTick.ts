@@ -1,6 +1,6 @@
 // 마디:틱 표기(.pattern 채보 포맷, SPEC.md 7-1절) <-> ms 변환.
 // BPM에 비례해 박자 단위로 노트를 배치하기 위한 순수 함수만 모아둔다.
-import { PATTERN_TICKS_PER_BEAT } from "../config";
+import { PATTERN_TICKS_PER_BEAT } from "./formatConstants";
 import { barStartAbsoluteTick, type TimeSignature } from "./timeSignature";
 
 export interface BarTick {

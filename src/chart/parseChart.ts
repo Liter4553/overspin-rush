@@ -1,7 +1,7 @@
 import type { BpmChange, Chart, ChartNote, NoteLane, NoteType, TickBpmChange } from "./types";
 import { isValidDenominator, type TimeSignature } from "./timeSignature";
 import { msToAbsoluteTick } from "./barTick";
-import { PATTERN_TICKS_PER_BEAT } from "../config";
+import { PATTERN_TICKS_PER_BEAT } from "./formatConstants";
 
 function parseTickBpmChange(value: unknown, index: number): TickBpmChange {
   const item = asRecord(value, `bpmChangeTicks[${index}]`);
