@@ -325,8 +325,8 @@ level=12
 [songStorage.ts](src/import/songStorage.ts)(IndexedDB 저장) 순으로 이어진다.
 저장은 원본 `.pattern` 텍스트와 음원/자켓 blob 그대로이고, 실제 파싱은 선곡 화면에 표시할
 때마다 [importedSongEntries.ts](src/import/importedSongEntries.ts)가 수행한다(저장 형식과
-파서 버전을 분리). 곡 목록 새로고침 버튼(⟳)으로 언제든 다시 불러올 수 있다. 삭제 기능은
-범위 밖(추후 결정).
+파서 버전을 분리). 곡 목록 새로고침 버튼(⟳)으로 언제든 다시 불러올 수 있다.
+삭제는 위 7-1절의 롱프레스 방식으로 구현되어 있다.
 
 ### 실제 오디오 재생
 
